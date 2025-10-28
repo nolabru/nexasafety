@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'package:flutter_map_heatmap/flutter_map_heatmap.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nexasafety/core/services/occurrence_service.dart';
 import 'package:nexasafety/models/api_occurrence.dart';
@@ -75,9 +73,9 @@ class HeatmapService {
     return allOccurrences;
   }
 
-  /// Converts occurrences to heatmap weighted lat/lng points
-  /// Each occurrence becomes a point with configurable weight
-  List<WeightedLatLng> convertToHeatmapData(
+  /// Filter occurrences by type and date
+  /// Returns filtered list of occurrences for visualization
+  List<ApiOccurrence> filterOccurrences(
     List<ApiOccurrence> occurrences, {
     String? filterByType,
     DateTime? afterDate,
@@ -94,33 +92,7 @@ class HeatmapService {
       filtered = filtered.where((o) => o.createdAt.isAfter(afterDate)).toList();
     }
 
-    // Convert to weighted points
-    // Weight can be adjusted based on severity or recency
-    return filtered.map((occurrence) {
-      return WeightedLatLng(
-        LatLng(occurrence.latitude, occurrence.longitude),
-        _calculateWeight(occurrence),
-      );
-    }).toList();
-  }
-
-  /// Calculate weight for each occurrence based on type severity
-  /// Higher severity crimes get higher weights in the heatmap
-  double _calculateWeight(ApiOccurrence occurrence) {
-    switch (occurrence.tipo) {
-      case 'ASSALTO':
-        return 1.0; // Highest severity
-      case 'ROUBO':
-        return 0.9;
-      case 'AMEACA':
-        return 0.7;
-      case 'FURTO':
-        return 0.6;
-      case 'VANDALISMO':
-        return 0.5;
-      default:
-        return 0.4; // OUTROS
-    }
+    return filtered;
   }
 
   /// Get occurrences grouped by type for filter UI

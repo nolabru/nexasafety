@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_heatmap/flutter_map_heatmap.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:nexasafety/repositories/occurrence_repository.dart';
@@ -31,7 +30,6 @@ class _HomeMapPageState extends State<HomeMapPage> {
   bool _showHeatmap = false;
   bool _showMarkers = true;
   bool _isLoadingHeatmap = false;
-  List<WeightedLatLng> _heatmapData = [];
   List<ApiOccurrence> _occurrences = [];
   String? _filterType; // Filter by occurrence type
 
@@ -166,15 +164,13 @@ class _HomeMapPageState extends State<HomeMapPage> {
         forceRefresh: forceRefresh,
       );
 
-      // Convert to heatmap data
-      final heatmapData = _heatmapService.convertToHeatmapData(
-        occurrences,
-        filterByType: _filterType,
-      );
+      // Apply filter if specified
+      final filtered = _filterType != null
+          ? occurrences.where((o) => o.tipo == _filterType).toList()
+          : occurrences;
 
       setState(() {
-        _occurrences = occurrences;
-        _heatmapData = heatmapData;
+        _occurrences = filtered;
         _isLoadingHeatmap = false;
       });
     } catch (e) {
@@ -194,7 +190,7 @@ class _HomeMapPageState extends State<HomeMapPage> {
   void _toggleHeatmap() {
     setState(() {
       _showHeatmap = !_showHeatmap;
-      if (_showHeatmap && _heatmapData.isEmpty) {
+      if (_showHeatmap && _occurrences.isEmpty) {
         _loadHeatmapData();
       }
     });
@@ -242,12 +238,9 @@ class _HomeMapPageState extends State<HomeMapPage> {
   void _applyTypeFilter(String? type) {
     setState(() {
       _filterType = type;
-      // Re-generate heatmap data with new filter
-      _heatmapData = _heatmapService.convertToHeatmapData(
-        _occurrences,
-        filterByType: _filterType,
-      );
     });
+    // Reload data with new filter
+    _loadHeatmapData();
   }
 
   Future<void> _ensureLocation() async {
@@ -358,21 +351,7 @@ class _HomeMapPageState extends State<HomeMapPage> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.nexasafety',
               ),
-              // Heatmap layer (shown when enabled)
-              if (_showHeatmap && _heatmapData.isNotEmpty)
-                HeatmapLayer(
-                  heatmapDataSource: InMemoryHeatmapDataSource(
-                    data: _heatmapData,
-                  ),
-                  heatmapOptions: HeatmapOptions(
-                    gradient: HeatmapOptions.defaultGradient,
-                    minOpacity: 0.1,
-                    maxOpacity: 0.6,
-                    radius: 40,
-                    blur: 25,
-                  ),
-                ),
-              // Marker layer (can be shown with or without heatmap)
+              // Marker layer - shows dense markers when heatmap is enabled
               if (_showMarkers)
                 MarkerLayer(
                   markers: _buildMarkers(),

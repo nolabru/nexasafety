@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:flutter/material.dart';
 
 /// Service for handling media capture and selection
@@ -124,50 +123,6 @@ class MediaService {
       return file;
     } catch (e) {
       debugPrint('Error recording video: $e');
-      rethrow;
-    }
-  }
-
-  /// Crop image (optional feature)
-  /// Returns null if user cancels
-  Future<File?> cropImage(File imageFile) async {
-    try {
-      final croppedFile = await ImageCropper().cropImage(
-        sourcePath: imageFile.path,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        compressQuality: 85,
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Recortar imagem',
-            toolbarColor: Colors.blue,
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.original,
-            lockAspectRatio: false,
-            aspectRatioPresets: [
-              CropAspectRatioPreset.original,
-              CropAspectRatioPreset.square,
-              CropAspectRatioPreset.ratio4x3,
-              CropAspectRatioPreset.ratio16x9,
-            ],
-          ),
-          IOSUiSettings(
-            title: 'Recortar imagem',
-            aspectRatioPresets: [
-              CropAspectRatioPreset.original,
-              CropAspectRatioPreset.square,
-              CropAspectRatioPreset.ratio4x3,
-              CropAspectRatioPreset.ratio16x9,
-            ],
-          ),
-        ],
-      );
-
-      if (croppedFile == null) return null;
-
-      return File(croppedFile.path);
-    } catch (e) {
-      debugPrint('Error cropping image: $e');
       rethrow;
     }
   }

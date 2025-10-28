@@ -630,7 +630,7 @@ class _OccurrenceDetailPageState extends State<OccurrenceDetailPage> {
       child: Text(
         label,
         style: TextStyle(
-          color: color.shade700,
+          color: color,
           fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
