@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_heatmap/flutter_map_heatmap.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:nexasafety/repositories/occurrence_repository.dart';
 import 'package:nexasafety/models/occurrence.dart';
+import 'package:nexasafety/models/api_occurrence.dart';
 import 'package:nexasafety/core/services/api_client.dart';
+import 'package:nexasafety/core/services/heatmap_service.dart';
+import 'package:nexasafety/widgets/heatmap_filter_panel.dart';
 
 class HomeMapPage extends StatefulWidget {
   const HomeMapPage({super.key});
@@ -15,6 +19,7 @@ class HomeMapPage extends StatefulWidget {
 
 class _HomeMapPageState extends State<HomeMapPage> {
   final MapController _mapController = MapController();
+  final HeatmapService _heatmapService = HeatmapService();
 
   // São Paulo (fallback) - Av. Paulista
   LatLng _center = const LatLng(-23.55052, -46.633308);
@@ -22,45 +27,73 @@ class _HomeMapPageState extends State<HomeMapPage> {
   bool _isLoadingLocation = true;
   bool _isLoggedIn = false;
 
-  // Marcadores: fixa alguns mocks e inclui os criados pelo usuário (repositório)
-  List<Marker> _buildMarkers() {
-    final fixed = <Marker>[
-      Marker(
-        point: const LatLng(-23.556, -46.662), // furto
-        width: 40,
-        height: 40,
-        child: const _Pin(color: Colors.orange, tooltip: 'Furto: bicicleta'),
-      ),
-      Marker(
-        point: const LatLng(-23.554, -46.631), // assalto
-        width: 40,
-        height: 40,
-        child: const _Pin(color: Colors.red, tooltip: 'Assalto: celular'),
-      ),
-      Marker(
-        point: const LatLng(-23.548, -46.638), // vandalismo
-        width: 40,
-        height: 40,
-        child: const _Pin(color: Colors.yellow, tooltip: 'Vandalismo: pichação'),
-      ),
-      Marker(
-        point: const LatLng(-23.552, -46.644), // outros
-        width: 40,
-        height: 40,
-        child: const _Pin(color: Colors.blue, tooltip: 'Suspeita: atividade'),
-      ),
-      Marker(
-        point: const LatLng(-23.545, -46.633), // concluído
-        width: 40,
-        height: 40,
-        child: const _Pin(color: Colors.green, tooltip: 'Concluído'),
-      ),
-    ];
+  // Heatmap state
+  bool _showHeatmap = false;
+  bool _showMarkers = true;
+  bool _isLoadingHeatmap = false;
+  List<WeightedLatLng> _heatmapData = [];
+  List<ApiOccurrence> _occurrences = [];
+  String? _filterType; // Filter by occurrence type
 
-    final repo = OccurrenceRepository();
-    final dynamicMarkers = repo.all
-        .map(
-          (o) => Marker(
+  // Marcadores: API occurrences (when logged in) + local repository fallback
+  List<Marker> _buildMarkers() {
+    final markers = <Marker>[];
+
+    // Add markers from API occurrences (when heatmap data is loaded)
+    if (_occurrences.isNotEmpty) {
+      for (final occurrence in _occurrences) {
+        markers.add(
+          Marker(
+            point: LatLng(occurrence.latitude, occurrence.longitude),
+            width: 40,
+            height: 40,
+            child: GestureDetector(
+              onTap: () {
+                // Navigate to detail page
+                Navigator.of(context).pushNamed('/occurrence/${occurrence.id}');
+              },
+              child: _Pin(
+                color: occurrence.getColorByType(),
+                tooltip: '${_getTipoLabel(occurrence.tipo)}: ${occurrence.descricao}',
+              ),
+            ),
+          ),
+        );
+      }
+    } else {
+      // Fallback: Show fixed mock markers when no API data
+      markers.addAll([
+        Marker(
+          point: const LatLng(-23.556, -46.662),
+          width: 40,
+          height: 40,
+          child: const _Pin(color: Colors.orange, tooltip: 'Furto: bicicleta'),
+        ),
+        Marker(
+          point: const LatLng(-23.554, -46.631),
+          width: 40,
+          height: 40,
+          child: const _Pin(color: Colors.red, tooltip: 'Assalto: celular'),
+        ),
+        Marker(
+          point: const LatLng(-23.548, -46.638),
+          width: 40,
+          height: 40,
+          child: const _Pin(color: Colors.yellow, tooltip: 'Vandalismo: pichação'),
+        ),
+        Marker(
+          point: const LatLng(-23.552, -46.644),
+          width: 40,
+          height: 40,
+          child: const _Pin(color: Colors.blue, tooltip: 'Suspeita: atividade'),
+        ),
+      ]);
+
+      // Add local repository occurrences
+      final repo = OccurrenceRepository();
+      for (final o in repo.all) {
+        markers.add(
+          Marker(
             point: LatLng(o.lat, o.lng),
             width: 40,
             height: 40,
@@ -69,10 +102,30 @@ class _HomeMapPageState extends State<HomeMapPage> {
               tooltip: '${labelForType(o.type)}: ${o.description}',
             ),
           ),
-        )
-        .toList();
+        );
+      }
+    }
 
-    return [...fixed, ...dynamicMarkers];
+    return markers;
+  }
+
+  String _getTipoLabel(String tipo) {
+    switch (tipo) {
+      case 'ASSALTO':
+        return 'Assalto';
+      case 'ROUBO':
+        return 'Roubo';
+      case 'FURTO':
+        return 'Furto';
+      case 'VANDALISMO':
+        return 'Vandalismo';
+      case 'AMEACA':
+        return 'Ameaça';
+      case 'OUTROS':
+        return 'Outros';
+      default:
+        return tipo;
+    }
   }
 
   @override
@@ -80,6 +133,106 @@ class _HomeMapPageState extends State<HomeMapPage> {
     super.initState();
     _ensureLocation();
     _checkAuth();
+    _loadHeatmapData();
+  }
+
+  /// Load heatmap data from backend
+  Future<void> _loadHeatmapData({bool forceRefresh = false}) async {
+    if (!_isLoggedIn && !forceRefresh) {
+      // Skip loading if not logged in
+      return;
+    }
+
+    setState(() => _isLoadingHeatmap = true);
+
+    try {
+      // Fetch occurrences from backend
+      final occurrences = await _heatmapService.fetchOccurrences(
+        forceRefresh: forceRefresh,
+      );
+
+      // Convert to heatmap data
+      final heatmapData = _heatmapService.convertToHeatmapData(
+        occurrences,
+        filterByType: _filterType,
+      );
+
+      setState(() {
+        _occurrences = occurrences;
+        _heatmapData = heatmapData;
+        _isLoadingHeatmap = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingHeatmap = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao carregar dados do mapa: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Toggle between markers and heatmap view
+  void _toggleHeatmap() {
+    setState(() {
+      _showHeatmap = !_showHeatmap;
+      if (_showHeatmap && _heatmapData.isEmpty) {
+        _loadHeatmapData();
+      }
+    });
+  }
+
+  /// Toggle markers visibility
+  void _toggleMarkers() {
+    setState(() => _showMarkers = !_showMarkers);
+  }
+
+  /// Show filter panel
+  void _showFilterPanel() {
+    if (_occurrences.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Carregue os dados do mapa primeiro'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    final occurrenceCounts = _heatmapService.getOccurrenceCountByType(_occurrences);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => HeatmapFilterPanel(
+        occurrenceCounts: occurrenceCounts,
+        selectedType: _filterType,
+        onTypeSelected: (type) {
+          _applyTypeFilter(type);
+          Navigator.pop(context);
+        },
+        onClearFilters: () {
+          _applyTypeFilter(null);
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
+  /// Apply type filter and refresh heatmap
+  void _applyTypeFilter(String? type) {
+    setState(() {
+      _filterType = type;
+      // Re-generate heatmap data with new filter
+      _heatmapData = _heatmapService.convertToHeatmapData(
+        _occurrences,
+        filterByType: _filterType,
+      );
+    });
   }
 
   Future<void> _ensureLocation() async {
@@ -190,9 +343,25 @@ class _HomeMapPageState extends State<HomeMapPage> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.nexasafety',
               ),
-              MarkerLayer(
-                markers: _buildMarkers(),
-              ),
+              // Heatmap layer (shown when enabled)
+              if (_showHeatmap && _heatmapData.isNotEmpty)
+                HeatmapLayer(
+                  heatmapDataSource: InMemoryHeatmapDataSource(
+                    data: _heatmapData,
+                  ),
+                  heatmapOptions: HeatmapOptions(
+                    gradient: HeatmapOptions.defaultGradient,
+                    minOpacity: 0.1,
+                    maxOpacity: 0.6,
+                    radius: 40,
+                    blur: 25,
+                  ),
+                ),
+              // Marker layer (can be shown with or without heatmap)
+              if (_showMarkers)
+                MarkerLayer(
+                  markers: _buildMarkers(),
+                ),
             ],
           ),
           Align(
@@ -232,6 +401,160 @@ class _HomeMapPageState extends State<HomeMapPage> {
                 background: Colors.orangeAccent,
               ),
             ),
+          // Heatmap controls (top-right)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Column(
+              children: [
+                // Heatmap toggle button
+                Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  elevation: 4,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _isLoggedIn ? _toggleHeatmap : null,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _showHeatmap ? Icons.layers_clear : Icons.layers,
+                            color: _isLoggedIn
+                                ? (_showHeatmap ? Colors.red : Colors.blue)
+                                : Colors.grey,
+                            size: 28,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _showHeatmap ? 'Mapa' : 'Calor',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: _isLoggedIn ? Colors.black87 : Colors.grey,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Markers toggle button
+                Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  elevation: 4,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _toggleMarkers,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _showMarkers
+                                ? Icons.location_on
+                                : Icons.location_off,
+                            color: _showMarkers ? Colors.green : Colors.grey,
+                            size: 28,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Pinos',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Filter button
+                if (_showHeatmap)
+                  Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    elevation: 4,
+                    child: Stack(
+                      children: [
+                        InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: _showFilterPanel,
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.filter_list,
+                                  color: _filterType != null
+                                      ? Colors.purple
+                                      : Colors.grey,
+                                  size: 28,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Filtro',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.black87,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // Badge indicator when filter is active
+                        if (_filterType != null)
+                          Positioned(
+                            right: 8,
+                            top: 8,
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.purple,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                // Loading indicator
+                if (_isLoadingHeatmap)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(

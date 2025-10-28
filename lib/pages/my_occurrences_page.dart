@@ -110,6 +110,68 @@ class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
     return 'Há ${diff.inDays}d';
   }
 
+  /// Show dialog with local occurrence details
+  void _showLocalOccurrenceDialog(BuildContext context, Occurrence occurrence) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.location_on,
+              color: _colorForLocalType(occurrence.type),
+            ),
+            const SizedBox(width: 8),
+            Text(labelForType(occurrence.type)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Descrição:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(occurrence.description),
+              const SizedBox(height: 16),
+              const Text(
+                'Localização:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Lat: ${occurrence.lat.toStringAsFixed(6)}\nLng: ${occurrence.lng.toStringAsFixed(6)}',
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Criado:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(_relativeTime(occurrence.createdAt)),
+              const SizedBox(height: 16),
+              const Text(
+                'Status:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              const Text('Salvo localmente (não sincronizado)'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final repo = OccurrenceRepository();
@@ -154,9 +216,8 @@ class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
                           isThreeLine: true,
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Detalhes (WIP).')),
-                            );
+                            // Navigate to detail page with occurrence ID
+                            Navigator.of(context).pushNamed('/occurrence/${o.id}');
                           },
                         );
                       } else {
@@ -176,9 +237,9 @@ class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
                           isThreeLine: true,
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Detalhes (WIP).')),
-                            );
+                            // Local occurrences don't have backend IDs yet
+                            // Show detailed info in a dialog instead
+                            _showLocalOccurrenceDialog(context, o);
                           },
                         );
                       }

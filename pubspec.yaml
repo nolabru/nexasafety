@@ -35,14 +35,32 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  flutter_map:
-  latlong2:
-  geolocator:
-  shared_preferences:
-  http:
-  flutter_secure_storage:
-  http_parser:
-  mime:
+  # Core dependencies (existing)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.0
+  geolocator: ^11.0.0
+  shared_preferences: ^2.2.2
+  http: ^1.2.0
+  flutter_secure_storage: ^9.0.0
+  http_parser: ^4.0.2
+  mime: ^1.0.5
+
+  # Phase 1: Heatmap visualization
+  flutter_map_heatmap: ^1.1.0
+
+  # Phase 2: Media capture and display
+  image_picker: ^1.0.7
+  cached_network_image: ^3.3.1
+  video_player: ^2.8.2
+  image_cropper: ^5.0.1
+
+  # Phase 5: Offline support
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.2
+
+  # Phase 7: State management
+  provider: ^6.1.1
 
 dev_dependencies:
   flutter_test:
