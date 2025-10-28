@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexasafety/core/services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -20,14 +21,21 @@ class _LoginPageState extends State<LoginPage> {
     form.save();
 
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 600)); // simula request
-    if (!mounted) return;
-    setState(() => _loading = false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Login simulado com sucesso')),
-    );
-    Navigator.of(context).pushReplacementNamed('/home');
+    try {
+      await AuthService().login(email: _email, password: _password);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login realizado')),
+      );
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao entrar: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -89,12 +97,10 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 SizedBox(height: spacing),
                 TextButton(
-                  onPressed: () => Navigator.of(context).pushReplacementNamed('/signup'),
+                  onPressed: _loading
+                      ? null
+                      : () => Navigator.of(context).pushReplacementNamed('/signup'),
                   child: const Text('Não tem conta? Cadastre-se'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pushReplacementNamed('/home'),
-                  child: const Text('Continuar sem login'),
                 ),
               ],
             ),

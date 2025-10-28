@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:nexasafety/repositories/occurrence_repository.dart';
 import 'package:nexasafety/models/occurrence.dart';
+import 'package:nexasafety/core/services/occurrence_service.dart';
+import 'package:nexasafety/core/services/api_client.dart';
+import 'package:nexasafety/models/api_occurrence.dart';
 
 class MyOccurrencesPage extends StatefulWidget {
   const MyOccurrencesPage({super.key});
@@ -10,7 +13,43 @@ class MyOccurrencesPage extends StatefulWidget {
 }
 
 class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
-  Color _colorForType(String t) {
+  bool _useApi = false;
+  bool _loading = true;
+  List<ApiOccurrence> _apiItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+    });
+    try {
+      final token = await ApiClient().getToken();
+      if (token != null && token.isNotEmpty) {
+        final items = await OccurrenceService().getMyOccurrences();
+        if (!mounted) return;
+        setState(() {
+          _useApi = true;
+          _apiItems = items;
+          _loading = false;
+        });
+        return;
+      }
+    } catch (_) {
+      // fallback para local
+    }
+    if (!mounted) return;
+    setState(() {
+      _useApi = false;
+      _loading = false;
+    });
+  }
+
+  Color _colorForLocalType(String t) {
     switch (t) {
       case 'assalto':
         return Colors.red;
@@ -22,6 +61,41 @@ class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
         return Colors.blue;
       case 'concluido':
         return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _labelForApiType(String tipo) {
+    switch (tipo) {
+      case 'ROUBO':
+        return 'Roubo';
+      case 'FURTO':
+        return 'Furto';
+      case 'VANDALISMO':
+        return 'Vandalismo';
+      case 'ASSALTO':
+        return 'Assalto';
+      case 'AMEACA':
+        return 'Ameaça';
+      case 'OUTROS':
+      default:
+        return 'Outros';
+    }
+  }
+
+  Color _colorForApiType(String tipo) {
+    switch (tipo) {
+      case 'ROUBO':
+        return Colors.red;
+      case 'FURTO':
+        return Colors.orange;
+      case 'VANDALISMO':
+        return Colors.purple;
+      case 'ASSALTO':
+        return Colors.deepOrange;
+      case 'AMEACA':
+        return Colors.amber;
       default:
         return Colors.grey;
     }
@@ -39,57 +113,87 @@ class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
   @override
   Widget build(BuildContext context) {
     final repo = OccurrenceRepository();
-    final items = repo.all;
+    final localItems = repo.all;
+
+    final hasItems = _useApi ? _apiItems.isNotEmpty : localItems.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Minhas Ocorrências'),
+        actions: [
+          IconButton(
+            tooltip: 'Atualizar',
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
-      body: items.isEmpty
-          ? _EmptyState(onNew: () => Navigator.of(context).pushNamed('/new'))
-          : RefreshIndicator(
-              onRefresh: () async {
-                // Mock: apenas aguarda e recarrega a lista local
-                await Future.delayed(const Duration(milliseconds: 500));
-                if (!mounted) return;
-                setState(() {});
-              },
-              child: ListView.separated(
-                padding: const EdgeInsets.only(top: 8, bottom: 16),
-                itemBuilder: (_, i) {
-                  final o = items[i];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: _colorForType(o.type),
-                      child: const Icon(Icons.location_on, color: Colors.white),
-                    ),
-                    title: Text(labelForType(o.type)),
-                    subtitle: Text(
-                      '${o.description}\n${_relativeTime(o.createdAt)}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    isThreeLine: true,
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      // Poderia abrir detalhes; por enquanto apenas snackbar
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Detalhes (WIP).')),
-                      );
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : !hasItems
+              ? _EmptyState(onNew: () => Navigator.of(context).pushNamed('/new'))
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.only(top: 8, bottom: 16),
+                    itemBuilder: (_, i) {
+                      if (_useApi) {
+                        final o = _apiItems[i];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: _colorForApiType(o.tipo),
+                            child:
+                                const Icon(Icons.location_on, color: Colors.white),
+                          ),
+                          title: Text(_labelForApiType(o.tipo)),
+                          subtitle: Text(
+                            '${o.descricao}\n${_relativeTime(o.createdAt)}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          isThreeLine: true,
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Detalhes (WIP).')),
+                            );
+                          },
+                        );
+                      } else {
+                        final o = localItems[i];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: _colorForLocalType(o.type),
+                            child:
+                                const Icon(Icons.location_on, color: Colors.white),
+                          ),
+                          title: Text(labelForType(o.type)),
+                          subtitle: Text(
+                            '${o.description}\n${_relativeTime(o.createdAt)}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          isThreeLine: true,
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Detalhes (WIP).')),
+                            );
+                          },
+                        );
+                      }
                     },
-                  );
-                },
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemCount: items.length,
-              ),
-            ),
-      floatingActionButton: items.isEmpty
-          ? null
-          : FloatingActionButton.extended(
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemCount: _useApi ? _apiItems.length : localItems.length,
+                  ),
+                ),
+      floatingActionButton: hasItems
+          ? FloatingActionButton.extended(
               onPressed: () => Navigator.of(context).pushNamed('/new'),
               icon: const Icon(Icons.add),
               label: const Text('Nova'),
-            ),
+            )
+          : null,
     );
   }
 }

@@ -39,6 +39,10 @@ dependencies:
   latlong2:
   geolocator:
   shared_preferences:
+  http:
+  flutter_secure_storage:
+  http_parser:
+  mime:
 
 dev_dependencies:
   flutter_test:

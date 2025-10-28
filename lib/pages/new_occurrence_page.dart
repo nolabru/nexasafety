@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:nexasafety/models/occurrence.dart';
 import 'package:nexasafety/repositories/occurrence_repository.dart';
+import 'package:nexasafety/core/services/occurrence_service.dart';
+import 'package:nexasafety/core/services/api_client.dart';
+import 'package:nexasafety/core/services/api_client.dart' show ApiException, UnauthorizedException;
 
 class NewOccurrencePage extends StatefulWidget {
   const NewOccurrencePage({super.key});
@@ -16,6 +19,41 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
   String _description = '';
   bool _anonymous = true;
   bool _submitting = false;
+
+  // Mapeia o tipo local (UI) para o tipo da API
+  String _toApiType(String local) {
+    switch (local) {
+      case 'assalto':
+        return 'ASSALTO';
+      case 'furto':
+        return 'FURTO';
+      case 'vandalismo':
+        return 'VANDALISMO';
+      case 'suspeita':
+        return 'OUTROS';
+      case 'concluido':
+        return 'OUTROS';
+      default:
+        return 'OUTROS';
+    }
+  }
+
+  // Mapeia o tipo da API para o local para exibir marcador no mapa (repo)
+  String _fromApiType(String api) {
+    switch (api) {
+      case 'ASSALTO':
+        return 'assalto';
+      case 'FURTO':
+        return 'furto';
+      case 'VANDALISMO':
+        return 'vandalismo';
+      case 'AMEACA':
+      case 'OUTROS':
+        return 'suspeita';
+      default:
+        return 'suspeita';
+    }
+  }
 
   Future<void> _submit() async {
     final form = _formKey.currentState;
@@ -54,22 +92,75 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      final repo = OccurrenceRepository();
+      // Tenta usar API se houver token
+      final hasToken = (await ApiClient().getToken())?.isNotEmpty == true;
       final now = DateTime.now();
-      final newItem = Occurrence(
-        id: now.millisecondsSinceEpoch.toString(),
-        type: _type,
-        description: _description,
-        lat: pos.latitude,
-        lng: pos.longitude,
-        anonymous: _anonymous,
-        createdAt: now,
+
+      if (hasToken) {
+        try {
+          final apiTipo = _toApiType(_type);
+          final created = await OccurrenceService().createOccurrence(
+            tipo: apiTipo,
+            descricao: _description,
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+            isPublic: true, // simplificado: sempre pública (anônimo apenas como UI)
+          );
+
+          // Também adiciona ao repositório local para aparecer no mapa atual
+          final repo = OccurrenceRepository();
+          repo.add(
+            Occurrence(
+              id: created.id,
+              type: _fromApiType(created.tipo),
+              description: created.descricao,
+              lat: created.latitude,
+              lng: created.longitude,
+              anonymous: _anonymous,
+              createdAt: created.createdAt,
+            ),
+          );
+
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ocorrência registrada.')),
+          );
+          Navigator.of(context).pop(true);
+          return;
+        } on UnauthorizedException {
+          // segue para fallback local
+        } on ApiException catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro na API: ${e.message}. Usando modo local.')),
+          );
+          // continua para fallback local
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Falha ao enviar para API: $e. Usando modo local.')),
+          );
+          // continua para fallback local
+        }
+      }
+
+      // Fallback local (modo anônimo / offline)
+      final repo = OccurrenceRepository();
+      repo.add(
+        Occurrence(
+          id: now.millisecondsSinceEpoch.toString(),
+          type: _type,
+          description: _description,
+          lat: pos.latitude,
+          lng: pos.longitude,
+          anonymous: _anonymous,
+          createdAt: now,
+        ),
       );
-      repo.add(newItem);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ocorrência registrada (mock).')),
+        const SnackBar(content: Text('Ocorrência registrada localmente.')),
       );
       Navigator.of(context).pop(true);
     } catch (e) {

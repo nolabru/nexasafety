@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:nexasafety/core/services/auth_service.dart';
+import 'package:nexasafety/core/services/api_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashPage extends StatefulWidget {
@@ -17,16 +19,33 @@ class _SplashPageState extends State<SplashPage> {
   }
 
   Future<void> _bootstrap() async {
-    // pequena animação/pausa
-    await Future.delayed(const Duration(milliseconds: 800));
+    // breve pausa para splash
+    await Future.delayed(const Duration(milliseconds: 600));
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getBool('seen_onboarding') ?? false;
 
     if (!mounted) return;
-    if (seen) {
-      Navigator.of(context).pushReplacementNamed('/home');
-    } else {
+
+    if (!seen) {
       Navigator.of(context).pushReplacementNamed('/onboarding');
+      return;
+    }
+
+    // Se já viu onboarding, tenta autenticação
+    try {
+      final token = await ApiClient().getToken();
+      if (token == null || token.isEmpty) {
+        Navigator.of(context).pushReplacementNamed('/login');
+        return;
+      }
+
+      // Valida token
+      await AuthService().me();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed('/home');
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed('/login');
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:nexasafety/repositories/occurrence_repository.dart';
 import 'package:nexasafety/models/occurrence.dart';
+import 'package:nexasafety/core/services/api_client.dart';
 
 class HomeMapPage extends StatefulWidget {
   const HomeMapPage({super.key});
@@ -19,6 +20,7 @@ class _HomeMapPageState extends State<HomeMapPage> {
   LatLng _center = const LatLng(-23.55052, -46.633308);
   bool _locPermissionDenied = false;
   bool _isLoadingLocation = true;
+  bool _isLoggedIn = false;
 
   // Marcadores: fixa alguns mocks e inclui os criados pelo usuário (repositório)
   List<Marker> _buildMarkers() {
@@ -77,6 +79,7 @@ class _HomeMapPageState extends State<HomeMapPage> {
   void initState() {
     super.initState();
     _ensureLocation();
+    _checkAuth();
   }
 
   Future<void> _ensureLocation() async {
@@ -127,6 +130,30 @@ class _HomeMapPageState extends State<HomeMapPage> {
     _mapController.move(_center, 14);
   }
 
+  Future<void> _checkAuth() async {
+    final token = await ApiClient().getToken();
+    if (!mounted) return;
+    setState(() {
+      _isLoggedIn = token != null && token.isNotEmpty;
+    });
+  }
+
+  Future<void> _handleAuthAction() async {
+    if (_isLoggedIn) {
+      await ApiClient().clearToken();
+      if (!mounted) return;
+      setState(() => _isLoggedIn = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sessão encerrada.')),
+      );
+      // Redireciona para login após sair
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    } else {
+      await Navigator.of(context).pushNamed('/login');
+      await _checkAuth();
+    }
+  }
+
   Color _colorForType(String t) {
     switch (t) {
       case 'assalto':
@@ -168,16 +195,20 @@ class _HomeMapPageState extends State<HomeMapPage> {
               ),
             ],
           ),
-          Positioned(
-            right: 12,
-            top: 100,
-            child: _MenuPanel(
-              onView: () => Navigator.of(context).pushNamed('/my'),
-              onNew: () async {
-                final res = await Navigator.of(context).pushNamed('/new');
-                if (!mounted) return;
-                if (res == true) setState(() {});
-              },
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: _MenuPanel(
+                isLoggedIn: _isLoggedIn,
+                onView: () => Navigator.of(context).pushNamed('/my'),
+                onNew: () async {
+                  final res = await Navigator.of(context).pushNamed('/new');
+                  if (!mounted) return;
+                  if (res == true) setState(() {});
+                },
+                onAuth: _handleAuthAction,
+              ),
             ),
           ),
           if (_isLoadingLocation)
@@ -232,9 +263,16 @@ class _Pin extends StatelessWidget {
 }
 
 class _MenuPanel extends StatelessWidget {
+  final bool isLoggedIn;
   final VoidCallback onView;
   final VoidCallback onNew;
-  const _MenuPanel({required this.onView, required this.onNew});
+  final VoidCallback onAuth;
+  const _MenuPanel({
+    required this.isLoggedIn,
+    required this.onView,
+    required this.onNew,
+    required this.onAuth,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -265,6 +303,12 @@ class _MenuPanel extends StatelessWidget {
             icon: Icons.add_location_alt_outlined,
             tooltip: 'Cadastrar ocorrência',
             onTap: onNew,
+          ),
+          const SizedBox(height: 12),
+          _MenuCircleButton(
+            icon: isLoggedIn ? Icons.logout : Icons.person_outline,
+            tooltip: isLoggedIn ? 'Sair' : 'Entrar',
+            onTap: onAuth,
           ),
         ],
       ),

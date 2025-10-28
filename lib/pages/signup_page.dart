@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nexasafety/core/services/auth_service.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -9,10 +10,12 @@ class SignupPage extends StatefulWidget {
 
 class _SignupPageState extends State<SignupPage> {
   final _formKey = GlobalKey<FormState>();
+  final _passwordController = TextEditingController();
+
   String _name = '';
   String _email = '';
   String _password = '';
-  String _confirm = '';
+  String _phone = '';
   bool _loading = false;
 
   Future<void> _submit() async {
@@ -22,14 +25,32 @@ class _SignupPageState extends State<SignupPage> {
     form.save();
 
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 700)); // simula request
-    if (!mounted) return;
-    setState(() => _loading = false);
+    try {
+      await AuthService().register(
+        email: _email,
+        password: _password,
+        nome: _name,
+        telefone: _phone,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cadastro realizado. Faça login.')),
+      );
+      Navigator.of(context).pushReplacementNamed('/login');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao cadastrar: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cadastro simulado com sucesso')),
-    );
-    Navigator.of(context).pushReplacementNamed('/login');
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -73,6 +94,22 @@ class _SignupPageState extends State<SignupPage> {
                 ),
                 SizedBox(height: spacing),
                 TextFormField(
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Telefone',
+                    hintText: 'Ex.: 71999999999',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) {
+                    final s = (v ?? '').trim();
+                    if (s.isEmpty) return 'Informe seu telefone';
+                    return null;
+                  },
+                  onSaved: (v) => _phone = (v ?? '').trim(),
+                ),
+                SizedBox(height: spacing),
+                TextFormField(
+                  controller: _passwordController,
                   obscureText: true,
                   decoration: const InputDecoration(
                     labelText: 'Senha',
@@ -84,20 +121,6 @@ class _SignupPageState extends State<SignupPage> {
                     return null;
                   },
                   onSaved: (v) => _password = (v ?? '').trim(),
-                ),
-                SizedBox(height: spacing),
-                TextFormField(
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirmar senha',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) {
-                    final s = (v ?? '').trim();
-                    if (s != _password) return 'Senhas não conferem';
-                    return null;
-                  },
-                  onSaved: (v) => _confirm = (v ?? '').trim(),
                 ),
                 SizedBox(height: spacing * 2),
                 SizedBox(
@@ -118,7 +141,9 @@ class _SignupPageState extends State<SignupPage> {
                 ),
                 SizedBox(height: spacing),
                 TextButton(
-                  onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
+                  onPressed: _loading
+                      ? null
+                      : () => Navigator.of(context).pushReplacementNamed('/login'),
                   child: const Text('Já tem conta? Entrar'),
                 ),
               ],
