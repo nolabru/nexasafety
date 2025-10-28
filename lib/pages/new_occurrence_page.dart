@@ -33,36 +33,44 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
   String? _bairro;
   bool _loadingGeocode = false;
 
-  // Mapeia o tipo local (UI) para o tipo da API
+  // Mapeia o tipo local (UI) para o tipo da API (lowercase com underscore)
   String _toApiType(String local) {
     switch (local) {
       case 'assalto':
-        return 'ASSALTO';
+        return 'assalto';
       case 'furto':
-        return 'FURTO';
+        return 'furto';
       case 'vandalismo':
-        return 'VANDALISMO';
+        return 'vandalismo';
       case 'suspeita':
-        return 'OUTROS';
+        return 'outros';
       case 'concluido':
-        return 'OUTROS';
+        return 'outros';
       default:
-        return 'OUTROS';
+        return 'outros';
     }
   }
 
-  // Mapeia o tipo da API para o local para exibir marcador no mapa (repo)
+  // Mapeia o tipo da API (lowercase) para o local para exibir marcador no mapa (repo)
   String _fromApiType(String api) {
-    switch (api) {
-      case 'ASSALTO':
+    switch (api.toLowerCase()) {
+      case 'assalto':
+      case 'roubo':
         return 'assalto';
-      case 'FURTO':
+      case 'furto':
         return 'furto';
-      case 'VANDALISMO':
+      case 'vandalismo':
         return 'vandalismo';
-      case 'AMEACA':
-      case 'OUTROS':
-        return 'suspeita';
+      case 'agressao':
+      case 'violencia_domestica':
+      case 'ameaca':
+      case 'outros':
+      case 'perturbacao':
+      case 'trafico':
+      case 'homicidio':
+      case 'desaparecimento':
+      case 'incendio':
+      case 'acidente_transito':
       default:
         return 'suspeita';
     }

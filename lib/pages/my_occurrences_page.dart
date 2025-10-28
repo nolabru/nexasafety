@@ -67,35 +67,61 @@ class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
   }
 
   String _labelForApiType(String tipo) {
-    switch (tipo) {
-      case 'ROUBO':
+    switch (tipo.toLowerCase()) {
+      case 'roubo':
         return 'Roubo';
-      case 'FURTO':
+      case 'furto':
         return 'Furto';
-      case 'VANDALISMO':
+      case 'vandalismo':
         return 'Vandalismo';
-      case 'ASSALTO':
+      case 'assalto':
         return 'Assalto';
-      case 'AMEACA':
+      case 'ameaca':
         return 'Ameaça';
-      case 'OUTROS':
+      case 'agressao':
+        return 'Agressão';
+      case 'acidente_transito':
+        return 'Acidente de Trânsito';
+      case 'perturbacao':
+        return 'Perturbação';
+      case 'violencia_domestica':
+        return 'Violência Doméstica';
+      case 'trafico':
+        return 'Tráfico';
+      case 'homicidio':
+        return 'Homicídio';
+      case 'desaparecimento':
+        return 'Desaparecimento';
+      case 'incendio':
+        return 'Incêndio';
+      case 'outros':
       default:
         return 'Outros';
     }
   }
 
   Color _colorForApiType(String tipo) {
-    switch (tipo) {
-      case 'ROUBO':
+    switch (tipo.toLowerCase()) {
+      case 'roubo':
+      case 'assalto':
         return Colors.red;
-      case 'FURTO':
+      case 'furto':
         return Colors.orange;
-      case 'VANDALISMO':
+      case 'vandalismo':
         return Colors.purple;
-      case 'ASSALTO':
+      case 'agressao':
+      case 'violencia_domestica':
         return Colors.deepOrange;
-      case 'AMEACA':
+      case 'ameaca':
         return Colors.amber;
+      case 'homicidio':
+        return Colors.red.shade900;
+      case 'trafico':
+        return Colors.purple.shade900;
+      case 'acidente_transito':
+        return Colors.blue;
+      case 'incendio':
+        return Colors.deepOrange.shade900;
       default:
         return Colors.grey;
     }

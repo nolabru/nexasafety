@@ -85,40 +85,88 @@ class HeatmapFilterPanel extends StatelessWidget {
   }
 
   List<Widget> _buildTypeFilters() {
-    // Define occurrence types with icons and colors
+    // Define occurrence types with icons and colors (lowercase to match backend)
     final types = [
       _TypeFilter(
-        type: 'ASSALTO',
+        type: 'assalto',
         label: 'Assalto',
         icon: Icons.dangerous,
         color: Colors.deepOrange,
       ),
       _TypeFilter(
-        type: 'ROUBO',
+        type: 'roubo',
         label: 'Roubo',
         icon: Icons.phone_android,
         color: Colors.red,
       ),
       _TypeFilter(
-        type: 'AMEACA',
+        type: 'ameaca',
         label: 'Ameaça',
         icon: Icons.warning,
         color: Colors.amber,
       ),
       _TypeFilter(
-        type: 'FURTO',
+        type: 'furto',
         label: 'Furto',
         icon: Icons.shopping_bag,
         color: Colors.orange,
       ),
       _TypeFilter(
-        type: 'VANDALISMO',
+        type: 'vandalismo',
         label: 'Vandalismo',
         icon: Icons.broken_image,
         color: Colors.purple,
       ),
       _TypeFilter(
-        type: 'OUTROS',
+        type: 'agressao',
+        label: 'Agressão',
+        icon: Icons.front_hand,
+        color: Colors.deepOrange,
+      ),
+      _TypeFilter(
+        type: 'acidente_transito',
+        label: 'Acidente de Trânsito',
+        icon: Icons.car_crash,
+        color: Colors.blue,
+      ),
+      _TypeFilter(
+        type: 'violencia_domestica',
+        label: 'Violência Doméstica',
+        icon: Icons.home,
+        color: Colors.red.shade800,
+      ),
+      _TypeFilter(
+        type: 'trafico',
+        label: 'Tráfico',
+        icon: Icons.medication,
+        color: Colors.purple.shade900,
+      ),
+      _TypeFilter(
+        type: 'homicidio',
+        label: 'Homicídio',
+        icon: Icons.warning_amber,
+        color: Colors.red.shade900,
+      ),
+      _TypeFilter(
+        type: 'desaparecimento',
+        label: 'Desaparecimento',
+        icon: Icons.person_search,
+        color: Colors.indigo,
+      ),
+      _TypeFilter(
+        type: 'incendio',
+        label: 'Incêndio',
+        icon: Icons.local_fire_department,
+        color: Colors.deepOrange.shade900,
+      ),
+      _TypeFilter(
+        type: 'perturbacao',
+        label: 'Perturbação',
+        icon: Icons.volume_up,
+        color: Colors.amber.shade700,
+      ),
+      _TypeFilter(
+        type: 'outros',
         label: 'Outros',
         icon: Icons.report,
         color: Colors.grey,

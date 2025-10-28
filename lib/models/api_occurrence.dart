@@ -4,7 +4,7 @@ import 'package:nexasafety/models/user.dart';
 
 class ApiOccurrence {
   final String id;
-  final String tipo; // ROUBO, FURTO, VANDALISMO, ASSALTO, AMEACA, OUTROS
+  final String tipo; // lowercase: roubo, furto, vandalismo, assalto, agressao, acidente_transito, etc.
   final String descricao;
   final double latitude;
   final double longitude;
@@ -12,7 +12,7 @@ class ApiOccurrence {
   final String? bairro;
   final String? cidade;
   final String? estado;
-  final String status; // PENDING, IN_PROGRESS, RESOLVED, REJECTED
+  final String status; // lowercase: enviado, analise, concluido, rejeitado
   final bool isPublic;
   final String? usuarioId;
   final DateTime createdAt;
@@ -67,48 +67,71 @@ class ApiOccurrence {
 
   // Helpers opcionais (cores/ícones por tipo) para UI
   Color getColorByType() {
-    switch (tipo) {
-      case 'ROUBO':
+    switch (tipo.toLowerCase()) {
+      case 'roubo':
+      case 'assalto':
         return Colors.red;
-      case 'FURTO':
+      case 'furto':
         return Colors.orange;
-      case 'VANDALISMO':
+      case 'vandalismo':
         return Colors.purple;
-      case 'ASSALTO':
+      case 'agressao':
+      case 'violencia_domestica':
         return Colors.deepOrange;
-      case 'AMEACA':
+      case 'ameaca':
         return Colors.amber;
+      case 'homicidio':
+        return Colors.red.shade900;
+      case 'trafico':
+        return Colors.purple.shade900;
+      case 'acidente_transito':
+        return Colors.blue;
+      case 'incendio':
+        return Colors.deepOrange.shade900;
       default:
         return Colors.grey;
     }
   }
 
   IconData getIconByType() {
-    switch (tipo) {
-      case 'ROUBO':
-        return Icons.phone_android;
-      case 'FURTO':
-        return Icons.shopping_bag;
-      case 'VANDALISMO':
-        return Icons.broken_image;
-      case 'ASSALTO':
+    switch (tipo.toLowerCase()) {
+      case 'roubo':
+      case 'assalto':
         return Icons.dangerous;
-      case 'AMEACA':
+      case 'furto':
+        return Icons.shopping_bag;
+      case 'vandalismo':
+        return Icons.broken_image;
+      case 'agressao':
+        return Icons.front_hand;
+      case 'ameaca':
         return Icons.warning;
+      case 'acidente_transito':
+        return Icons.car_crash;
+      case 'homicidio':
+        return Icons.warning_amber;
+      case 'trafico':
+        return Icons.medication;
+      case 'violencia_domestica':
+        return Icons.home;
+      case 'incendio':
+        return Icons.local_fire_department;
+      case 'desaparecimento':
+        return Icons.person_search;
       default:
         return Icons.report;
     }
   }
 
   String getStatusLabel() {
-    switch (status) {
-      case 'PENDING':
-        return 'Pendente';
-      case 'IN_PROGRESS':
+    switch (status.toLowerCase()) {
+      case 'enviado':
+        return 'Enviado';
+      case 'analise':
         return 'Em análise';
-      case 'RESOLVED':
+      case 'concluido':
         return 'Concluída';
-      case 'REJECTED':
+      case 'rejeitado':
         return 'Rejeitada';
       default:
         return status;

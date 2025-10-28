@@ -108,18 +108,34 @@ class _HomeMapPageState extends State<HomeMapPage> {
   }
 
   String _getTipoLabel(String tipo) {
-    switch (tipo) {
-      case 'ASSALTO':
+    switch (tipo.toLowerCase()) {
+      case 'assalto':
         return 'Assalto';
-      case 'ROUBO':
+      case 'roubo':
         return 'Roubo';
-      case 'FURTO':
+      case 'furto':
         return 'Furto';
-      case 'VANDALISMO':
+      case 'vandalismo':
         return 'Vandalismo';
-      case 'AMEACA':
+      case 'ameaca':
         return 'Ameaça';
-      case 'OUTROS':
+      case 'agressao':
+        return 'Agressão';
+      case 'acidente_transito':
+        return 'Acidente de Trânsito';
+      case 'perturbacao':
+        return 'Perturbação';
+      case 'violencia_domestica':
+        return 'Violência Doméstica';
+      case 'trafico':
+        return 'Tráfico';
+      case 'homicidio':
+        return 'Homicídio';
+      case 'desaparecimento':
+        return 'Desaparecimento';
+      case 'incendio':
+        return 'Incêndio';
+      case 'outros':
         return 'Outros';
       default:
         return tipo;

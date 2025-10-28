@@ -598,20 +598,20 @@ class _OccurrenceDetailPageState extends State<OccurrenceDetailPage> {
     Color color;
     String label;
 
-    switch (status) {
-      case 'PENDING':
+    switch (status.toLowerCase()) {
+      case 'enviado':
         color = Colors.orange;
-        label = 'Pendente';
+        label = 'Enviado';
         break;
-      case 'IN_PROGRESS':
+      case 'analise':
         color = Colors.blue;
         label = 'Em análise';
         break;
-      case 'RESOLVED':
+      case 'concluido':
         color = Colors.green;
         label = 'Concluída';
         break;
-      case 'REJECTED':
+      case 'rejeitado':
         color = Colors.red;
         label = 'Rejeitada';
         break;
@@ -639,18 +639,34 @@ class _OccurrenceDetailPageState extends State<OccurrenceDetailPage> {
   }
 
   String _getTipoLabel(String tipo) {
-    switch (tipo) {
-      case 'ASSALTO':
+    switch (tipo.toLowerCase()) {
+      case 'assalto':
         return 'Assalto';
-      case 'ROUBO':
+      case 'roubo':
         return 'Roubo';
-      case 'FURTO':
+      case 'furto':
         return 'Furto';
-      case 'VANDALISMO':
+      case 'vandalismo':
         return 'Vandalismo';
-      case 'AMEACA':
+      case 'ameaca':
         return 'Ameaça';
-      case 'OUTROS':
+      case 'agressao':
+        return 'Agressão';
+      case 'acidente_transito':
+        return 'Acidente de Trânsito';
+      case 'perturbacao':
+        return 'Perturbação';
+      case 'violencia_domestica':
+        return 'Violência Doméstica';
+      case 'trafico':
+        return 'Tráfico';
+      case 'homicidio':
+        return 'Homicídio';
+      case 'desaparecimento':
+        return 'Desaparecimento';
+      case 'incendio':
+        return 'Incêndio';
+      case 'outros':
         return 'Outros';
       default:
         return tipo;
