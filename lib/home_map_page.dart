@@ -54,7 +54,7 @@ class _HomeMapPageState extends State<HomeMapPage> {
               },
               child: _Pin(
                 color: occurrence.getColorByType(),
-                tooltip: '${_getTipoLabel(occurrence.tipo)}: ${occurrence.descricao}',
+                tooltip: _buildTooltip(occurrence),
               ),
             ),
           ),
@@ -126,6 +126,21 @@ class _HomeMapPageState extends State<HomeMapPage> {
       default:
         return tipo;
     }
+  }
+
+  /// Build tooltip for marker with address info
+  String _buildTooltip(ApiOccurrence occurrence) {
+    final parts = <String>[];
+
+    // Type and description
+    parts.add('${_getTipoLabel(occurrence.tipo)}: ${occurrence.descricao}');
+
+    // Add neighborhood if available
+    if (occurrence.bairro != null && occurrence.bairro!.isNotEmpty) {
+      parts.add('📍 ${occurrence.bairro}');
+    }
+
+    return parts.join('\n');
   }
 
   @override

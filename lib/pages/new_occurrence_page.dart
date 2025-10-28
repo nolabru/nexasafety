@@ -7,6 +7,7 @@ import 'package:nexasafety/core/services/occurrence_service.dart';
 import 'package:nexasafety/core/services/api_client.dart';
 import 'package:nexasafety/core/services/api_client.dart' show ApiException, UnauthorizedException;
 import 'package:nexasafety/core/services/media_service.dart';
+import 'package:nexasafety/core/services/geocoding_service.dart';
 
 class NewOccurrencePage extends StatefulWidget {
   const NewOccurrencePage({super.key});
@@ -18,6 +19,7 @@ class NewOccurrencePage extends StatefulWidget {
 class _NewOccurrencePageState extends State<NewOccurrencePage> {
   final _formKey = GlobalKey<FormState>();
   final _mediaService = MediaService();
+  final _geocodingService = GeocodingService();
 
   String _type = occurrenceTypes.first;
   String _description = '';
@@ -25,6 +27,11 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
   bool _submitting = false;
   List<File> _mediaFiles = []; // Photos/videos attached to occurrence
   static const int _maxMediaFiles = 3;
+
+  // Geocoding state
+  String? _endereco;
+  String? _bairro;
+  bool _loadingGeocode = false;
 
   // Mapeia o tipo local (UI) para o tipo da API
   String _toApiType(String local) {
@@ -192,6 +199,29 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
     });
   }
 
+  /// Perform reverse geocoding for a position
+  Future<void> _performGeocoding(double lat, double lng) async {
+    setState(() => _loadingGeocode = true);
+
+    try {
+      final result = await _geocodingService.reverseGeocode(lat, lng);
+      if (mounted) {
+        setState(() {
+          _endereco = result.endereco;
+          _bairro = result.bairro;
+          _loadingGeocode = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingGeocode = false);
+        // Don't show error - geocoding is optional
+        // Just log it silently
+        debugPrint('Geocoding error: $e');
+      }
+    }
+  }
+
   Future<void> _submit() async {
     final form = _formKey.currentState;
     if (form == null) return;
@@ -228,6 +258,9 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
+
+      // Perform geocoding (non-blocking - don't wait for it)
+      _performGeocoding(pos.latitude, pos.longitude);
 
       // Tenta usar API se houver token
       final hasToken = (await ApiClient().getToken())?.isNotEmpty == true;
@@ -351,6 +384,84 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
                   ),
                 ),
                 SizedBox(height: spacing),
+                // Location info card
+                if (_endereco != null || _bairro != null || _loadingGeocode)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: 18,
+                              color: Colors.blue.shade700,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Localização',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.blue.shade900,
+                                fontSize: 14,
+                              ),
+                            ),
+                            if (_loadingGeocode) ...[
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.blue.shade700,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (_endereco != null || _bairro != null) ...[
+                          const SizedBox(height: 8),
+                          if (_bairro != null)
+                            Text(
+                              '📍 $_bairro',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          if (_endereco != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                _endereco!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ),
+                        ] else if (_loadingGeocode)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Obtendo endereço...',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (_endereco != null || _bairro != null || _loadingGeocode)
+                  SizedBox(height: spacing),
                 TextFormField(
                   maxLines: 4,
                   minLines: 3,
