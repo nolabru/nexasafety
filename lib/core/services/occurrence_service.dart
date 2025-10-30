@@ -18,7 +18,8 @@ class OccurrenceService {
 
   // POST /occurrences (JSON)
   Future<ApiOccurrence> createOccurrence({
-    required String tipo, // esperado pelo backend: 'roubo' | 'furto' | 'vandalismo' | 'assalto' | 'ameaca' | 'outros'
+    required String
+    tipo, // esperado pelo backend: 'roubo' | 'furto' | 'vandalismo' | 'assalto' | 'ameaca' | 'outros'
     required String descricao,
     required double latitude,
     required double longitude,
@@ -34,7 +35,9 @@ class OccurrenceService {
       'mediaUrls': mediaUrls,
     }, requiresAuth: true);
 
-    return ApiOccurrence.fromJson(json.decode(res.body) as Map<String, dynamic>);
+    return ApiOccurrence.fromJson(
+      json.decode(res.body) as Map<String, dynamic>,
+    );
   }
 
   // POST /occurrences/with-media (multipart)
@@ -77,13 +80,19 @@ class OccurrenceService {
     final response = await http.Response.fromStream(streamed);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return ApiOccurrence.fromJson(json.decode(response.body) as Map<String, dynamic>);
+      return ApiOccurrence.fromJson(
+        json.decode(response.body) as Map<String, dynamic>,
+      );
     } else {
       try {
         final body = json.decode(response.body);
-        throw ApiException(body['message']?.toString() ?? 'Erro ao criar ocorrência');
+        throw ApiException(
+          body['message']?.toString() ?? 'Erro ao criar ocorrência',
+        );
       } catch (_) {
-        throw ApiException('Erro ${response.statusCode}: ${response.reasonPhrase}');
+        throw ApiException(
+          'Erro ${response.statusCode}: ${response.reasonPhrase}',
+        );
       }
     }
   }
@@ -92,7 +101,9 @@ class OccurrenceService {
   Future<List<ApiOccurrence>> getMyOccurrences() async {
     final res = await _api.get('/occurrences/my', requiresAuth: true);
     final List<dynamic> data = json.decode(res.body) as List<dynamic>;
-    return data.map((e) => ApiOccurrence.fromJson(e as Map<String, dynamic>)).toList();
+    return data
+        .map((e) => ApiOccurrence.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // GET /occurrences (com paginação/filtros)
@@ -113,7 +124,9 @@ class OccurrenceService {
       },
     );
 
-    return PaginatedOccurrences.fromJson(json.decode(res.body) as Map<String, dynamic>);
+    return PaginatedOccurrences.fromJson(
+      json.decode(res.body) as Map<String, dynamic>,
+    );
   }
 
   // GET /occurrences/nearby
@@ -129,14 +142,73 @@ class OccurrenceService {
     };
 
     // nearby não exige auth no guia; usando sem requiresAuth
-    final res = await _api.get('/occurrences/nearby', requiresAuth: false, queryParams: uriParams);
-    final List<dynamic> data = json.decode(res.body) as List<dynamic>;
-    return data.map((e) => ApiOccurrence.fromJson(e as Map<String, dynamic>)).toList();
+    try {
+      final res = await _api.get(
+        '/occurrences/nearby',
+        requiresAuth: false,
+        queryParams: uriParams,
+      );
+      final List<dynamic> data = json.decode(res.body) as List<dynamic>;
+      return data
+          .map((e) => ApiOccurrence.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on NotFoundException {
+      // Fallback para rota em PT-BR
+      final res = await _api.get(
+        '/ocorrencias/nearby',
+        requiresAuth: false,
+        queryParams: uriParams,
+      );
+      final List<dynamic> data = json.decode(res.body) as List<dynamic>;
+      return data
+          .map((e) => ApiOccurrence.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+  }
+
+  // GET /occurrences/heatmap
+  // When bounds are omitted, backend applies default bounds (Salvador-BA)
+  Future<Map<String, dynamic>> getHeatmapRaw({
+    double? minLat,
+    double? minLng,
+    double? maxLat,
+    double? maxLng,
+    int? zoom,
+    bool requiresAuth = true,
+  }) async {
+    Map<String, String>? qp;
+    if (minLat != null && minLng != null && maxLat != null && maxLng != null) {
+      qp = {
+        'minLat': minLat.toString(),
+        'minLng': minLng.toString(),
+        'maxLat': maxLat.toString(),
+        'maxLng': maxLng.toString(),
+        if (zoom != null) 'zoom': zoom.toString(),
+      };
+    }
+    try {
+      final res = await _api.get(
+        '/occurrences/heatmap',
+        requiresAuth: requiresAuth,
+        queryParams: qp,
+      );
+      return json.decode(res.body) as Map<String, dynamic>;
+    } on NotFoundException {
+      // Fallback para rota em PT-BR
+      final res = await _api.get(
+        '/ocorrencias/heatmap',
+        requiresAuth: requiresAuth,
+        queryParams: qp,
+      );
+      return json.decode(res.body) as Map<String, dynamic>;
+    }
   }
 
   // GET /occurrences/:id
   Future<ApiOccurrence> getById(String id) async {
     final res = await _api.get('/occurrences/$id', requiresAuth: true);
-    return ApiOccurrence.fromJson(json.decode(res.body) as Map<String, dynamic>);
+    return ApiOccurrence.fromJson(
+      json.decode(res.body) as Map<String, dynamic>,
+    );
   }
 }

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:nexasafety/core/services/auth_service.dart';
+import 'package:flutter/services.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_text_styles.dart';
+import '../widgets/custom_button.dart';
+import '../widgets/custom_text_field.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -10,144 +14,303 @@ class SignupPage extends StatefulWidget {
 
 class _SignupPageState extends State<SignupPage> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  String _name = '';
-  String _email = '';
-  String _password = '';
-  String _phone = '';
-  bool _loading = false;
-
-  Future<void> _submit() async {
-    final form = _formKey.currentState;
-    if (form == null) return;
-    if (!form.validate()) return;
-    form.save();
-
-    setState(() => _loading = true);
-    try {
-      await AuthService().register(
-        email: _email,
-        password: _password,
-        nome: _name,
-        telefone: _phone,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cadastro realizado. Faça login.')),
-      );
-      Navigator.of(context).pushReplacementNamed('/login');
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao cadastrar: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _acceptedTerms = false;
 
   @override
   void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  Future<void> _onSignup() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (!_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Você deve aceitar os termos e condições'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    // TODO: Implement actual signup logic
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    setState(() => _isLoading = false);
+
+    // Navigate to home
+    Navigator.of(context).pushReplacementNamed('/home');
+  }
+
+  void _onLogin() {
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final spacing = 12.0;
+    // Set status bar to white
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+    );
+    
     return Scaffold(
-      appBar: AppBar(title: const Text('Cadastro')),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              children: [
-                TextFormField(
-                  decoration: const InputDecoration(
-                    labelText: 'Nome',
-                    border: OutlineInputBorder(),
+      backgroundColor: AppColors.primary,
+      extendBody: true,
+      extendBodyBehindAppBar: true,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              // Top section with map illustration
+              Expanded(
+                flex: 2,
+                child: Center(
+                  child: Image.asset(
+                    'assets/location.png',
+                    width: 180,
+                    height: 180,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 180,
+                        height: 180,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(
+                          Icons.map_outlined,
+                          size: 70,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
                   ),
-                  validator: (v) {
-                    final s = (v ?? '').trim();
-                    if (s.isEmpty) return 'Informe seu nome';
-                    return null;
-                  },
-                  onSaved: (v) => _name = (v ?? '').trim(),
                 ),
-                SizedBox(height: spacing),
-                TextFormField(
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
+              ),
+              
+              // Bottom section with form
+              Expanded(
+                flex: 8,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(32),
+                      topRight: Radius.circular(32),
+                    ),
                   ),
-                  validator: (v) {
-                    final s = (v ?? '').trim();
-                    if (s.isEmpty) return 'Informe seu email';
-                    if (!s.contains('@')) return 'Email inválido';
-                    return null;
-                  },
-                  onSaved: (v) => _email = (v ?? '').trim(),
-                ),
-                SizedBox(height: spacing),
-                TextFormField(
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Telefone',
-                    hintText: 'Ex.: 71999999999',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) {
-                    final s = (v ?? '').trim();
-                    if (s.isEmpty) return 'Informe seu telefone';
-                    return null;
-                  },
-                  onSaved: (v) => _phone = (v ?? '').trim(),
-                ),
-                SizedBox(height: spacing),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Senha',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) {
-                    final s = (v ?? '').trim();
-                    if (s.length < 4) return 'Mínimo de 4 caracteres';
-                    return null;
-                  },
-                  onSaved: (v) => _password = (v ?? '').trim(),
-                ),
-                SizedBox(height: spacing * 2),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: _loading ? null : _submit,
-                    child: _loading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      32,
+                      32,
+                      32,
+                      32 + MediaQuery.of(context).padding.bottom,
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Title
+                          Text(
+                            'Crie Sua Conta',
+                            style: AppTextStyles.headlineLarge.copyWith(
+                              color: AppColors.primary,
                             ),
-                          )
-                        : const Text('Cadastrar'),
+                            textAlign: TextAlign.center,
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Subtitle
+                          Text(
+                            'Crie sua conta para iniciar a sua jornada',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          
+                          const SizedBox(height: 32),
+                          
+                          // Name field
+                          CustomTextField(
+                            label: 'Nome Completo',
+                            hint: 'Digite seu nome completo',
+                            controller: _nameController,
+                            keyboardType: TextInputType.name,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Por favor, insira seu nome';
+                              }
+                              if (value.length < 3) {
+                                return 'Nome deve ter pelo menos 3 caracteres';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Email field
+                          CustomTextField(
+                            label: 'Email',
+                            hint: 'Digite seu email',
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Por favor, insira seu email';
+                              }
+                              if (!value.contains('@')) {
+                                return 'Por favor, insira um email válido';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Password field
+                          CustomTextField(
+                            label: 'Senha',
+                            hint: 'Digite sua senha',
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: Color(0xFF47897F),
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Por favor, insira sua senha';
+                              }
+                              if (value.length < 6) {
+                                return 'A senha deve ter pelo menos 6 caracteres';
+                              }
+                              return null;
+                            },
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Terms checkbox
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Checkbox(
+                                value: _acceptedTerms,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _acceptedTerms = value ?? false;
+                                  });
+                                },
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: RichText(
+                                    text: TextSpan(
+                                      style: AppTextStyles.bodySmall,
+                                      children: [
+                                        const TextSpan(
+                                          text: 'Eu li e aceito os ',
+                                        ),
+                                        TextSpan(
+                                          text: 'termos e condições',
+                                          style: AppTextStyles.bodySmall.copyWith(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const TextSpan(text: ' e a '),
+                                        TextSpan(
+                                          text: 'política de privacidade',
+                                          style: AppTextStyles.bodySmall.copyWith(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Signup button
+                          CustomButton(
+                            text: 'Iniciar',
+                            onPressed: _onSignup,
+                            isLoading: _isLoading,
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Login link
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Já possui uma conta? ',
+                                style: AppTextStyles.bodyMedium,
+                              ),
+                              TextButton(
+                                onPressed: _onLogin,
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: Text(
+                                  'Faça login',
+                                  style: AppTextStyles.bodyMedium.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                SizedBox(height: spacing),
-                TextButton(
-                  onPressed: _loading
-                      ? null
-                      : () => Navigator.of(context).pushReplacementNamed('/login'),
-                  child: const Text('Já tem conta? Entrar'),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

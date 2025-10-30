@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:nexasafety/repositories/occurrence_repository.dart';
-import 'package:nexasafety/models/occurrence.dart';
-import 'package:nexasafety/core/services/occurrence_service.dart';
-import 'package:nexasafety/core/services/api_client.dart';
-import 'package:nexasafety/models/api_occurrence.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:intl/intl.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_text_styles.dart';
+import '../core/enums/occurrence_enums.dart';
+import '../core/services/occurrence_service.dart';
+import '../models/api_occurrence.dart';
+import '../widgets/occurrence_card.dart';
 
 class MyOccurrencesPage extends StatefulWidget {
   const MyOccurrencesPage({super.key});
@@ -13,312 +16,208 @@ class MyOccurrencesPage extends StatefulWidget {
 }
 
 class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
-  bool _useApi = false;
-  bool _loading = true;
-  List<ApiOccurrence> _apiItems = [];
+  final _occurrenceService = OccurrenceService();
+  List<ApiOccurrence>? _occurrences;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadOccurrences();
   }
 
-  Future<void> _load() async {
+  Future<void> _loadOccurrences() async {
     setState(() {
-      _loading = true;
+      _isLoading = true;
+      _errorMessage = null;
     });
+
     try {
-      final token = await ApiClient().getToken();
-      if (token != null && token.isNotEmpty) {
-        final items = await OccurrenceService().getMyOccurrences();
-        if (!mounted) return;
-        setState(() {
-          _useApi = true;
-          _apiItems = items;
-          _loading = false;
-        });
-        return;
-      }
-    } catch (_) {
-      // fallback para local
-    }
-    if (!mounted) return;
-    setState(() {
-      _useApi = false;
-      _loading = false;
-    });
-  }
-
-  Color _colorForLocalType(String t) {
-    switch (t) {
-      case 'assalto':
-        return Colors.red;
-      case 'furto':
-        return Colors.orange;
-      case 'vandalismo':
-        return Colors.yellow;
-      case 'suspeita':
-        return Colors.blue;
-      case 'concluido':
-        return Colors.green;
-      default:
-        return Colors.grey;
+      final occurrences = await _occurrenceService.getMyOccurrences();
+      setState(() {
+        _occurrences = occurrences;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Erro ao carregar ocorrências: $e';
+        _isLoading = false;
+      });
     }
   }
 
-  String _labelForApiType(String tipo) {
+  OccurrenceType _mapTypeFromApi(String tipo) {
     switch (tipo.toLowerCase()) {
       case 'roubo':
-        return 'Roubo';
+        return OccurrenceType.roubo;
       case 'furto':
-        return 'Furto';
+        return OccurrenceType.furto;
       case 'vandalismo':
-        return 'Vandalismo';
+        return OccurrenceType.vandalismo;
       case 'assalto':
-        return 'Assalto';
-      case 'ameaca':
-        return 'Ameaça';
+        return OccurrenceType.assalto;
       case 'agressao':
-        return 'Agressão';
+      case 'agressão':
+        return OccurrenceType.agressao;
       case 'acidente_transito':
-        return 'Acidente de Trânsito';
+      case 'acidente de trânsito':
+        return OccurrenceType.acidenteTransito;
       case 'perturbacao':
-        return 'Perturbação';
+      case 'perturbação':
+        return OccurrenceType.perturbacao;
       case 'violencia_domestica':
-        return 'Violência Doméstica';
+      case 'violência doméstica':
+        return OccurrenceType.violenciaDomestica;
       case 'trafico':
-        return 'Tráfico';
+      case 'tráfico':
+        return OccurrenceType.trafico;
       case 'homicidio':
-        return 'Homicídio';
+      case 'homicídio':
+        return OccurrenceType.homicidio;
       case 'desaparecimento':
-        return 'Desaparecimento';
+        return OccurrenceType.desaparecimento;
       case 'incendio':
-        return 'Incêndio';
-      case 'outros':
+      case 'incêndio':
+        return OccurrenceType.incendio;
       default:
-        return 'Outros';
+        return OccurrenceType.outros;
     }
   }
 
-  Color _colorForApiType(String tipo) {
-    switch (tipo.toLowerCase()) {
-      case 'roubo':
-      case 'assalto':
-        return Colors.red;
-      case 'furto':
-        return Colors.orange;
-      case 'vandalismo':
-        return Colors.purple;
-      case 'agressao':
-      case 'violencia_domestica':
-        return Colors.deepOrange;
-      case 'ameaca':
-        return Colors.amber;
-      case 'homicidio':
-        return Colors.red.shade900;
-      case 'trafico':
-        return Colors.purple.shade900;
-      case 'acidente_transito':
-        return Colors.blue;
-      case 'incendio':
-        return Colors.deepOrange.shade900;
+  OccurrenceStatus _mapStatusFromApi(String status) {
+    switch (status.toLowerCase()) {
+      case 'enviado':
+      case 'pending':
+        return OccurrenceStatus.enviado;
+      case 'analise':
+      case 'em análise':
+      case 'in_progress':
+        return OccurrenceStatus.analise;
+      case 'concluido':
+      case 'concluído':
+      case 'resolved':
+        return OccurrenceStatus.concluido;
+      case 'rejeitado':
+      case 'rejected':
+        return OccurrenceStatus.rejeitado;
       default:
-        return Colors.grey;
+        return OccurrenceStatus.enviado;
     }
   }
 
-  String _relativeTime(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-    if (diff.inSeconds < 60) return 'Há ${diff.inSeconds}s';
-    if (diff.inMinutes < 60) return 'Há ${diff.inMinutes}m';
-    if (diff.inHours < 24) return 'Há ${diff.inHours}h';
-    return 'Há ${diff.inDays}d';
-  }
-
-  /// Show dialog with local occurrence details
-  void _showLocalOccurrenceDialog(BuildContext context, Occurrence occurrence) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              Icons.location_on,
-              color: _colorForLocalType(occurrence.type),
-            ),
-            const SizedBox(width: 8),
-            Text(labelForType(occurrence.type)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Descrição:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              Text(occurrence.description),
-              const SizedBox(height: 16),
-              const Text(
-                'Localização:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Lat: ${occurrence.lat.toStringAsFixed(6)}\nLng: ${occurrence.lng.toStringAsFixed(6)}',
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Criado:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              Text(_relativeTime(occurrence.createdAt)),
-              const SizedBox(height: 16),
-              const Text(
-                'Status:',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              const Text('Salvo localmente (não sincronizado)'),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
-          ),
-        ],
-      ),
-    );
+  String _formatDate(DateTime date) {
+    return DateFormat('dd/MM/yyyy').format(date);
   }
 
   @override
   Widget build(BuildContext context) {
-    final repo = OccurrenceRepository();
-    final localItems = repo.all;
-
-    final hasItems = _useApi ? _apiItems.isNotEmpty : localItems.isNotEmpty;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Minhas Ocorrências'),
+        title: Text(
+          'Minhas Ocorrências',
+          style: AppTextStyles.headlineMedium.copyWith(
+            color: AppColors.primary,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         actions: [
           IconButton(
-            tooltip: 'Atualizar',
-            onPressed: _loading ? null : _load,
             icon: const Icon(Icons.refresh),
+            onPressed: _loadOccurrences,
           ),
         ],
       ),
-      body: _loading
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : !hasItems
-              ? _EmptyState(onNew: () => Navigator.of(context).pushNamed('/new'))
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.only(top: 8, bottom: 16),
-                    itemBuilder: (_, i) {
-                      if (_useApi) {
-                        final o = _apiItems[i];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: _colorForApiType(o.tipo),
-                            child:
-                                const Icon(Icons.location_on, color: Colors.white),
+          : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 80,
+                        color: AppColors.statusRejeitado,
+                      ),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Text(
+                          _errorMessage!,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
                           ),
-                          title: Text(_labelForApiType(o.tipo)),
-                          subtitle: Text(
-                            '${o.descricao}\n${_relativeTime(o.createdAt)}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          isThreeLine: true,
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            // Navigate to detail page with occurrence ID
-                            Navigator.of(context).pushNamed('/occurrence/${o.id}');
-                          },
-                        );
-                      } else {
-                        final o = localItems[i];
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: _colorForLocalType(o.type),
-                            child:
-                                const Icon(Icons.location_on, color: Colors.white),
-                          ),
-                          title: Text(labelForType(o.type)),
-                          subtitle: Text(
-                            '${o.description}\n${_relativeTime(o.createdAt)}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          isThreeLine: true,
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () {
-                            // Local occurrences don't have backend IDs yet
-                            // Show detailed info in a dialog instead
-                            _showLocalOccurrenceDialog(context, o);
-                          },
-                        );
-                      }
-                    },
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemCount: _useApi ? _apiItems.length : localItems.length,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadOccurrences,
+                        child: const Text('Tentar Novamente'),
+                      ),
+                    ],
                   ),
-                ),
-      floatingActionButton: hasItems
-          ? FloatingActionButton.extended(
-              onPressed: () => Navigator.of(context).pushNamed('/new'),
-              icon: const Icon(Icons.add),
-              label: const Text('Nova'),
-            )
-          : null,
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final VoidCallback onNew;
-  const _EmptyState({required this.onNew});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.receipt_long, size: 64, color: color),
-            const SizedBox(height: 16),
-            const Text(
-              'Nenhuma ocorrência registrada ainda',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Registre sua primeira ocorrência para que ela apareça aqui.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.black54),
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: onNew,
-              icon: const Icon(Icons.add),
-              label: const Text('Registrar Ocorrência'),
-            ),
-          ],
-        ),
+                )
+              : _occurrences == null || _occurrences!.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.inbox_outlined,
+                            size: 80,
+                            color: AppColors.textLight,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Nenhuma ocorrência registrada',
+                            style: AppTextStyles.titleLarge.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Suas ocorrências aparecerão aqui',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: _occurrences!.length,
+                      itemBuilder: (context, index) {
+                        final occurrence = _occurrences![index];
+                        return OccurrenceCard(
+                          id: occurrence.id,
+                          type: _mapTypeFromApi(occurrence.tipo),
+                          status: _mapStatusFromApi(occurrence.status ?? 'enviado'),
+                          description: occurrence.descricao,
+                          date: _formatDate(occurrence.createdAt),
+                          onTap: () {
+                            Navigator.of(context).pushNamed(
+                              '/occurrence/${occurrence.id}',
+                            );
+                          },
+                        );
+                      },
+                    ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final result = await Navigator.of(context).pushNamed('/new');
+          if (result == true && mounted) {
+            // Reload occurrences
+            _loadOccurrences();
+          }
+        },
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }

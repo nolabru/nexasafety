@@ -2,7 +2,7 @@ class Config {
   // Base URL para desenvolvimento (ajustável via --dart-define)
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://disclose-acrobat-owned-entered.trycloudflare.com/api/v1',
+    defaultValue: 'http://localhost:3000/api/v1',
   );
 
   // HERE API Key (ajustável via --dart-define)

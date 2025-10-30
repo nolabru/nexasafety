@@ -8,6 +8,9 @@ import 'package:nexasafety/models/api_occurrence.dart';
 import 'package:nexasafety/core/services/api_client.dart';
 import 'package:nexasafety/core/services/heatmap_service.dart';
 import 'package:nexasafety/widgets/heatmap_filter_panel.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:nexasafety/core/services/occurrence_service.dart';
+import 'dart:async';
 
 class HomeMapPage extends StatefulWidget {
   const HomeMapPage({super.key});
@@ -19,12 +22,16 @@ class HomeMapPage extends StatefulWidget {
 class _HomeMapPageState extends State<HomeMapPage> {
   final MapController _mapController = MapController();
   final HeatmapService _heatmapService = HeatmapService();
+  final OccurrenceService _occurrenceApi = OccurrenceService();
 
   // São Paulo (fallback) - Av. Paulista
   LatLng _center = const LatLng(-23.55052, -46.633308);
   bool _locPermissionDenied = false;
   bool _isLoadingLocation = true;
   bool _isLoggedIn = false;
+  // Heatmap aggregated points from backend
+  List<HeatmapPoint> _heatPoints = [];
+  Timer? _heatDebounce;
 
   // Heatmap state
   bool _showHeatmap = false;
@@ -50,8 +57,9 @@ class _HomeMapPageState extends State<HomeMapPage> {
                 // Navigate to detail page
                 Navigator.of(context).pushNamed('/occurrence/${occurrence.id}');
               },
-              child: _Pin(
+              child: _TypeMarker(
                 color: occurrence.getColorByType(),
+                icon: _iconForType(occurrence.tipo),
                 tooltip: _buildTooltip(occurrence),
               ),
             ),
@@ -65,25 +73,41 @@ class _HomeMapPageState extends State<HomeMapPage> {
           point: const LatLng(-23.556, -46.662),
           width: 40,
           height: 40,
-          child: const _Pin(color: Colors.orange, tooltip: 'Furto: bicicleta'),
+          child: _TypeMarker(
+            color: Colors.orange,
+            icon: _iconForType('furto'),
+            tooltip: 'Furto: bicicleta',
+          ),
         ),
         Marker(
           point: const LatLng(-23.554, -46.631),
           width: 40,
           height: 40,
-          child: const _Pin(color: Colors.red, tooltip: 'Assalto: celular'),
+          child: _TypeMarker(
+            color: Colors.red,
+            icon: _iconForType('assalto'),
+            tooltip: 'Assalto: celular',
+          ),
         ),
         Marker(
           point: const LatLng(-23.548, -46.638),
           width: 40,
           height: 40,
-          child: const _Pin(color: Colors.yellow, tooltip: 'Vandalismo: pichação'),
+          child: _TypeMarker(
+            color: Colors.yellow,
+            icon: _iconForType('vandalismo'),
+            tooltip: 'Vandalismo: pichação',
+          ),
         ),
         Marker(
           point: const LatLng(-23.552, -46.644),
           width: 40,
           height: 40,
-          child: const _Pin(color: Colors.blue, tooltip: 'Suspeita: atividade'),
+          child: _TypeMarker(
+            color: Colors.blue,
+            icon: _iconForType('suspeita'),
+            tooltip: 'Suspeita: atividade',
+          ),
         ),
       ]);
 
@@ -95,8 +119,9 @@ class _HomeMapPageState extends State<HomeMapPage> {
             point: LatLng(o.lat, o.lng),
             width: 40,
             height: 40,
-            child: _Pin(
+            child: _TypeMarker(
               color: _colorForType(o.type),
+              icon: _iconForType(o.type),
               tooltip: '${labelForType(o.type)}: ${o.description}',
             ),
           ),
@@ -202,14 +227,112 @@ class _HomeMapPageState extends State<HomeMapPage> {
     }
   }
 
-  /// Toggle between markers and heatmap view
-  void _toggleHeatmap() {
-    setState(() {
-      _showHeatmap = !_showHeatmap;
-      if (_showHeatmap && _occurrences.isEmpty) {
-        _loadHeatmapData();
+  void _scheduleHeatReload() {
+    _heatDebounce?.cancel();
+    _heatDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (_showHeatmap) {
+        _loadHeatByBounds();
       }
     });
+  }
+
+  Future<void> _loadHeatByBounds() async {
+    try {
+      final camera = _mapController.camera;
+      final bounds = camera.visibleBounds;
+      final zoom = camera.zoom.floor();
+
+      final sw = bounds.southWest;
+      final ne = bounds.northEast;
+
+      setState(() => _isLoadingHeatmap = true);
+
+      final pts = await _heatmapService.fetchHeatmapByBounds(
+        minLat: sw.latitude,
+        minLng: sw.longitude,
+        maxLat: ne.latitude,
+        maxLng: ne.longitude,
+        zoom: zoom,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _heatPoints = pts;
+        _isLoadingHeatmap = false;
+      });
+      if (!mounted) return;
+      if (pts.isEmpty) {
+        try {
+          // Tenta fallback sem bounds (backend usa Salvador-BA por padrão)
+          final raw = await _occurrenceApi.getHeatmapRaw();
+          final List<dynamic> rawPoints = (raw['points'] as List?) ?? const [];
+          if (rawPoints.isNotEmpty && raw['bounds'] != null) {
+            // Converte pontos e move o mapa para o centro dos bounds
+            final converted = rawPoints
+                .map((e) => HeatmapPoint.fromMap(e as Map<String, dynamic>))
+                .toList();
+
+            final b = raw['bounds'] as Map<String, dynamic>;
+            final minLat = (b['minLat'] as num).toDouble();
+            final minLng = (b['minLng'] as num).toDouble();
+            final maxLat = (b['maxLat'] as num).toDouble();
+            final maxLng = (b['maxLng'] as num).toDouble();
+            final centerLat = (minLat + maxLat) / 2.0;
+            final centerLng = (minLng + maxLng) / 2.0;
+
+            if (!mounted) return;
+            setState(() {
+              _heatPoints = converted;
+            });
+
+            // Move o mapa para os bounds padrão com um zoom adequado
+            _mapController.move(LatLng(centerLat, centerLng), 12);
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Movi o mapa para uma área com dados de calor (Salvador-BA).'),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Heatmap sem pontos nesta área (zoom $zoom). Tente mover o mapa ou reduzir o zoom.',
+                ),
+              ),
+            );
+          }
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Sem pontos para exibir e falha no fallback: $e',
+              ),
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Heatmap: ${pts.length} pontos (zoom $zoom)'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingHeatmap = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao carregar heatmap: $e')),
+      );
+    }
+  }
+
+  /// Toggle between markers and heatmap view
+  void _toggleHeatmap() {
+    setState(() => _showHeatmap = !_showHeatmap);
+    if (_showHeatmap) {
+      _loadHeatByBounds();
+    }
   }
 
   /// Toggle markers visibility
@@ -229,7 +352,9 @@ class _HomeMapPageState extends State<HomeMapPage> {
       return;
     }
 
-    final occurrenceCounts = _heatmapService.getOccurrenceCountByType(_occurrences);
+    final occurrenceCounts = _showHeatmap
+        ? _countTypesFromHeatPoints(_heatPoints)
+        : _heatmapService.getOccurrenceCountByType(_occurrences);
 
     showModalBottomSheet(
       context: context,
@@ -255,8 +380,12 @@ class _HomeMapPageState extends State<HomeMapPage> {
     setState(() {
       _filterType = type;
     });
-    // Reload data with new filter
-    _loadHeatmapData();
+    // Recarrega de acordo com o modo atual
+    if (_showHeatmap) {
+      _loadHeatByBounds();
+    } else {
+      _loadHeatmapData();
+    }
   }
 
   Future<void> _ensureLocation() async {
@@ -348,12 +477,69 @@ class _HomeMapPageState extends State<HomeMapPage> {
     }
   }
 
+  // Escolhe um ícone representativo por tipo
+  IconData _iconForType(String t) {
+    switch (t.toLowerCase()) {
+      case 'assalto':
+      case 'roubo':
+        return FontAwesomeIcons.userSecret;
+      case 'furto':
+        return FontAwesomeIcons.cartShopping;
+      case 'vandalismo':
+        return FontAwesomeIcons.sprayCan;
+      case 'agressao':
+        return FontAwesomeIcons.handFist;
+      case 'ameaca':
+        return FontAwesomeIcons.triangleExclamation;
+      case 'acidente_transito':
+        return FontAwesomeIcons.carBurst;
+      case 'perturbacao':
+        return FontAwesomeIcons.bullhorn;
+      case 'violencia_domestica':
+        return FontAwesomeIcons.houseChimneyCrack;
+      case 'trafico':
+        return FontAwesomeIcons.notesMedical;
+      case 'homicidio':
+        return FontAwesomeIcons.skull;
+      case 'desaparecimento':
+        return FontAwesomeIcons.personCircleQuestion;
+      case 'incendio':
+        return FontAwesomeIcons.fireFlameCurved;
+      default:
+        return FontAwesomeIcons.locationDot;
+    }
+  }
+
+  // Cor do heatmap por intensidade (gradiente amarelo -> laranja -> vermelho)
+  Color _heatColorForIntensity(int intensity01to100) {
+    final v = intensity01to100.clamp(1, 100) / 100.0;
+    // stops: 0.0 = yellow, 0.5 = orange, 1.0 = red
+    const yellow = Color(0xFFFFEB3B);
+    const orange = Color(0xFFFF9800);
+    const red = Color(0xFFE53935);
+    if (v <= 0.5) {
+      final t = v / 0.5;
+      return Color.lerp(yellow, orange, t)!;
+    } else {
+      final t = (v - 0.5) / 0.5;
+      return Color.lerp(orange, red, t)!;
+    }
+  }
+
+  // Conta tipos a partir da lista de pontos do heatmap
+  Map<String, int> _countTypesFromHeatPoints(List<HeatmapPoint> points) {
+    final counts = <String, int>{};
+    for (final p in points) {
+      for (final t in p.tipos) {
+        counts[t] = (counts[t] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('NexaSafety'),
-      ),
       body: Stack(
         children: [
           FlutterMap(
@@ -361,6 +547,7 @@ class _HomeMapPageState extends State<HomeMapPage> {
             options: MapOptions(
               initialCenter: _center,
               initialZoom: 14,
+              onMapEvent: (event) => _scheduleHeatReload(),
             ),
             children: [
               TileLayer(
@@ -371,6 +558,27 @@ class _HomeMapPageState extends State<HomeMapPage> {
               if (_showMarkers)
                 MarkerLayer(
                   markers: _buildMarkers(),
+                ),
+              if (_showHeatmap && _heatPoints.isNotEmpty)
+                CircleLayer(
+                  circles: _heatPoints
+                      .where((p) =>
+                          _filterType == null ||
+                          p.tipos.map((e) => e.toLowerCase()).contains(_filterType!.toLowerCase()))
+                      .map((p) {
+                    final intensity = p.intensity.clamp(1, 100);
+                    final radius = (12 + intensity * 2.2).toDouble();
+                    final base = _heatColorForIntensity(intensity);
+                    final opacity = (0.45 + (intensity / 180)).clamp(0.45, 0.9).toDouble();
+                    final color = base.withOpacity(opacity);
+                    return CircleMarker(
+                      point: LatLng(p.lat, p.lng),
+                      radius: radius,
+                      color: color,
+                      borderStrokeWidth: 0,
+                      borderColor: Colors.transparent,
+                    );
+                  }).toList(),
                 ),
             ],
           ),
@@ -417,6 +625,35 @@ class _HomeMapPageState extends State<HomeMapPage> {
             right: 16,
             child: Column(
               children: [
+                // Open HERE SDK Map page
+                Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  elevation: 4,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => Navigator.of(context).pushNamed('/here'),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.map, color: Colors.teal, size: 28),
+                          SizedBox(height: 4),
+                          Text(
+                            'HERE',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 // Heatmap toggle button
                 Material(
                   color: Colors.white,
@@ -424,7 +661,16 @@ class _HomeMapPageState extends State<HomeMapPage> {
                   elevation: 4,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: _isLoggedIn ? _toggleHeatmap : null,
+                    onTap: () {
+                      if (!_isLoggedIn) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Faça login para usar o mapa de calor.')),
+                        );
+                        Navigator.of(context).pushNamed('/login');
+                        return;
+                      }
+                      _toggleHeatmap();
+                    },
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       child: Column(
@@ -576,20 +822,43 @@ class _HomeMapPageState extends State<HomeMapPage> {
   }
 }
 
-class _Pin extends StatelessWidget {
+class _TypeMarker extends StatelessWidget {
   final Color color;
+  final IconData icon;
   final String tooltip;
 
-  const _Pin({required this.color, required this.tooltip});
+  const _TypeMarker({
+    required this.color,
+    required this.icon,
+    required this.tooltip,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
-      child: Icon(
-        Icons.location_on,
-        color: color,
-        size: 34,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Icon(
+            icon,
+            size: 16,
+            color: Colors.white,
+          ),
+        ),
       ),
     );
   }
@@ -610,8 +879,7 @@ class _MenuPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 64,
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -623,23 +891,23 @@ class _MenuPanel extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _MenuCircleButton(
-            icon: Icons.receipt_long,
+            icon: FontAwesomeIcons.listUl,
             tooltip: 'Ver ocorrências',
             onTap: onView,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(width: 12),
           _MenuCircleButton(
-            icon: Icons.add_location_alt_outlined,
+            icon: FontAwesomeIcons.locationDot,
             tooltip: 'Cadastrar ocorrência',
             onTap: onNew,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(width: 12),
           _MenuCircleButton(
-            icon: isLoggedIn ? Icons.logout : Icons.person_outline,
+            icon: isLoggedIn ? FontAwesomeIcons.rightFromBracket : FontAwesomeIcons.rightToBracket,
             tooltip: isLoggedIn ? 'Sair' : 'Entrar',
             onTap: onAuth,
           ),

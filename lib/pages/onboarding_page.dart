@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/theme/app_colors.dart';
+import '../widgets/custom_button.dart';
+import '../widgets/onboarding_slide.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -9,135 +14,161 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  final PageController _controller = PageController();
-  int _index = 0;
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
 
-  Future<void> _finish() async {
+  final List<Map<String, dynamic>> _slides = [
+    {
+      'icon': FontAwesomeIcons.camera,
+      'title': 'Denuncie de forma anônima',
+      'description': 'Registre ocorrências com ou sem identificação',
+    },
+    {
+      'icon': FontAwesomeIcons.locationDot,
+      'title': 'Torne sua cidade mais segura',
+      'description': 'Registre e visualize ocorrências em tempo real na sua região.',
+    },
+    {
+      'icon': FontAwesomeIcons.bell,
+      'title': 'Receba alertas sobre sua região',
+      'description': 'Fique informado sobre o que acontece perto de você',
+    },
+  ];
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onContinue() async {
+    if (_currentPage < _slides.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      // Mark onboarding as completed
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isFirstTime', false);
+      
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed('/login');
+    }
+  }
+
+  void _onSkip() async {
+    // Mark onboarding as completed
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('seen_onboarding', true);
+    await prefs.setBool('isFirstTime', false);
+    
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed('/login');
   }
 
-  void _next() {
-    if (_index < 2) {
-      _controller.animateToPage(
-        _index + 1,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOut,
-      );
-    } else {
-      _finish();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('NexaSafety'),
-        actions: [
-          TextButton(
-            onPressed: _finish,
-            child: const Text('Pular'),
-          )
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: PageView(
-              controller: _controller,
-              onPageChanged: (i) => setState(() => _index = i),
-              children: const [
-                _Slide(
-                  icon: Icons.map,
-                  title: 'Torne sua cidade mais segura',
-                  desc: 'Registre e visualize ocorrências em tempo real na sua região.',
-                ),
-                _Slide(
-                  icon: Icons.photo_camera,
-                  title: 'Denuncie de forma anônima',
-                  desc: 'Registre ocorrências com ou sem identificação.',
-                ),
-                _Slide(
-                  icon: Icons.notifications_active,
-                  title: 'Receba alertas sobre sua região',
-                  desc: 'Fique informado sobre o que acontece perto de você.',
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              3,
-              (i) => AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: _index == i ? 22 : 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: _index == i ? color : Colors.grey.shade400,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _next,
-                child: Text(_index == 2 ? 'Começar' : 'Continuar'),
-              ),
-            ),
-          ),
-        ],
+    // Set status bar to white
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
       ),
     );
-  }
-}
-
-class _Slide extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String desc;
-
-  const _Slide({
-    required this.icon,
-    required this.title,
-    required this.desc,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 92, color: color),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-              textAlign: TextAlign.center,
+    
+    return Scaffold(
+      backgroundColor: AppColors.primary,
+      extendBody: true,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // PageView with slides
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() {
+                _currentPage = index;
+              });
+            },
+            itemCount: _slides.length,
+            itemBuilder: (context, index) {
+              final slide = _slides[index];
+              return OnboardingSlide(
+                icon: slide['icon'],
+                title: slide['title'],
+                description: slide['description'],
+              );
+            },
+          ),
+          
+          // Skip button
+          if (_currentPage < _slides.length - 1)
+            Positioned(
+              top: 48,
+              right: 24,
+              child: TextButton(
+                onPressed: _onSkip,
+                child: Text(
+                  'Pular',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              desc,
-              style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
-              textAlign: TextAlign.center,
+          
+          // Bottom section with indicators and button
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                32,
+                32,
+                32,
+                32 + MediaQuery.of(context).padding.bottom,
+              ),
+              child: Column(
+                children: [
+                  // Page indicators
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      _slides.length,
+                      (index) => Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: _currentPage == index ? 24 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _currentPage == index
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Continue/Start button
+                  CustomButton(
+                    text: _currentPage == _slides.length - 1
+                        ? 'Iniciar'
+                        : 'Continuar',
+                    onPressed: _onContinue,
+                    backgroundColor: Colors.white,
+                    textColor: AppColors.primary,
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

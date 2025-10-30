@@ -5,6 +5,31 @@ import 'package:nexasafety/models/api_occurrence.dart';
 
 /// Service responsible for fetching and transforming occurrence data
 /// into heatmap-compatible format with caching support
+class HeatmapPoint {
+  final double lat;
+  final double lng;
+  final int intensity;
+  final List<String> tipos;
+
+  HeatmapPoint({
+    required this.lat,
+    required this.lng,
+    required this.intensity,
+    this.tipos = const [],
+  });
+
+  factory HeatmapPoint.fromMap(Map<String, dynamic> m) {
+    return HeatmapPoint(
+      lat: (m['lat'] as num).toDouble(),
+      lng: (m['lng'] as num).toDouble(),
+      intensity: (m['intensity'] as num?)?.toInt() ?? 1,
+      tipos: m['tipos'] != null
+          ? List<String>.from(m['tipos'] as List)
+          : const [],
+    );
+  }
+}
+
 class HeatmapService {
   HeatmapService._internal();
   static final HeatmapService _instance = HeatmapService._internal();
@@ -71,6 +96,121 @@ class HeatmapService {
     await _saveCacheTimestamp();
 
     return allOccurrences;
+  }
+
+  /// Fetch aggregated heatmap points from backend using visible bounds
+  /// This calls GET /occurrences/heatmap which returns:
+  /// {
+  ///   points: [{ lat, lng, intensity, tipos: [...] }...],
+  ///   total: number,
+  ///   bounds: { minLat, minLng, maxLat, maxLng }
+  /// }
+  Future<List<HeatmapPoint>> fetchHeatmapByBounds({
+    required double minLat,
+    required double minLng,
+    required double maxLat,
+    required double maxLng,
+    int zoom = 14,
+    bool requiresAuth = true,
+  }) async {
+    final raw = await _occurrenceService.getHeatmapRaw(
+      minLat: minLat,
+      minLng: minLng,
+      maxLat: maxLat,
+      maxLng: maxLng,
+      zoom: zoom,
+      requiresAuth: requiresAuth,
+    );
+
+    // Tenta formatos alternativos do backend para maior resiliência.
+    return parseHeatmapPoints(raw);
+  }
+
+  // Aceita as seguintes formas de resposta:
+  // 1) { points: [{ lat, lng, intensity, tipos? }], total?, bounds? }
+  // 2) { data:  [{ lat|latitude|coordenadas.lat, lng|longitude|coordenadas.lng, intensity?, tipo? }], ... }
+  // 3) { ocorrencias: [{ ... campos variáveis ... }] } -> converte para pontos básicos (intensity=1)
+  List<HeatmapPoint> parseHeatmapPoints(Map<String, dynamic> raw) {
+    List dynamicList = const [];
+
+    if (raw['points'] is List) {
+      dynamicList = raw['points'] as List;
+      return dynamicList
+          .whereType<Map<String, dynamic>>()
+          .map((e) => HeatmapPoint.fromMap(e))
+          .toList();
+    }
+
+    if (raw['data'] is List) {
+      dynamicList = raw['data'] as List;
+      return dynamicList
+          .whereType<Map<String, dynamic>>()
+          .map((e) {
+            final m = e;
+            final coords = (m['coordenadas'] is Map)
+                ? (m['coordenadas'] as Map)
+                : null;
+            final num? latNum =
+                (m['lat'] as num?) ??
+                (m['latitude'] as num?) ??
+                (coords != null ? coords['lat'] as num? : null);
+            final num? lngNum =
+                (m['lng'] as num?) ??
+                (m['longitude'] as num?) ??
+                (coords != null ? coords['lng'] as num? : null);
+            if (latNum == null || lngNum == null) {
+              return null;
+            }
+            final tipos = <String>[];
+            if (m['tipos'] is List) {
+              tipos.addAll(List<String>.from(m['tipos'] as List));
+            } else if (m['tipo'] is String) {
+              tipos.add(m['tipo'] as String);
+            }
+            final intensity = (m['intensity'] as num?)?.toInt() ?? 1;
+            return HeatmapPoint(
+              lat: latNum.toDouble(),
+              lng: lngNum.toDouble(),
+              intensity: intensity,
+              tipos: tipos,
+            );
+          })
+          .whereType<HeatmapPoint>()
+          .toList();
+    }
+
+    if (raw['ocorrencias'] is List) {
+      dynamicList = raw['ocorrencias'] as List;
+      return dynamicList
+          .whereType<Map<String, dynamic>>()
+          .map((m) {
+            final coords = (m['coordenadas'] is Map)
+                ? (m['coordenadas'] as Map)
+                : null;
+            final num? latNum =
+                (coords != null ? coords['lat'] as num? : null) ??
+                (m['latitude'] as num?);
+            final num? lngNum =
+                (coords != null ? coords['lng'] as num? : null) ??
+                (m['longitude'] as num?);
+            if (latNum == null || lngNum == null) {
+              return null;
+            }
+            final tipo = m['tipo']?.toString();
+            final tipos = tipo != null ? <String>[tipo] : const <String>[];
+            return HeatmapPoint(
+              lat: latNum.toDouble(),
+              lng: lngNum.toDouble(),
+              intensity: 1,
+              tipos: tipos,
+            );
+          })
+          .whereType<HeatmapPoint>()
+          .toList();
+    }
+
+    // Sem correspondência conhecida: retorna vazio.
+    return const <HeatmapPoint>[];
   }
 
   /// Filter occurrences by type and date
