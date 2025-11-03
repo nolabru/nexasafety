@@ -28,7 +28,14 @@ class ApiClient {
     );
   }
 
-  Future<http.Response> get(
+  String get baseUrl => Config.apiBaseUrl;
+
+  /// Decodifica resposta JSON
+  dynamic decodeResponse(String body) {
+    return json.decode(body);
+  }
+
+  Future<dynamic> get(
     String endpoint, {
     Map<String, String>? queryParams,
     bool requiresAuth = true,
@@ -37,15 +44,17 @@ class ApiClient {
     final headers = await _buildHeaders(requiresAuth: requiresAuth);
     try {
       final response = await http.get(uri, headers: headers);
-      return _handleResponse(response);
+      final validatedResponse = _handleResponse(response);
+      return json.decode(validatedResponse.body);
     } catch (e) {
+      if (e is ApiException) rethrow;
       throw ApiException('Erro de conexão: $e');
     }
   }
 
-  Future<http.Response> post(
-    String endpoint,
-    Map<String, dynamic> body, {
+  Future<dynamic> post(
+    String endpoint, {
+    Map<String, dynamic>? data,
     bool requiresAuth = true,
   }) async {
     final uri = _buildUri(endpoint);
@@ -54,17 +63,19 @@ class ApiClient {
       final response = await http.post(
         uri,
         headers: headers,
-        body: json.encode(body),
+        body: data != null ? json.encode(data) : null,
       );
-      return _handleResponse(response);
+      final validatedResponse = _handleResponse(response);
+      return json.decode(validatedResponse.body);
     } catch (e) {
+      if (e is ApiException) rethrow;
       throw ApiException('Erro de conexão: $e');
     }
   }
 
-  Future<http.Response> patch(
-    String endpoint,
-    Map<String, dynamic> body, {
+  Future<dynamic> patch(
+    String endpoint, {
+    Map<String, dynamic>? data,
     bool requiresAuth = true,
   }) async {
     final uri = _buildUri(endpoint);
@@ -73,10 +84,12 @@ class ApiClient {
       final response = await http.patch(
         uri,
         headers: headers,
-        body: json.encode(body),
+        body: data != null ? json.encode(data) : null,
       );
-      return _handleResponse(response);
+      final validatedResponse = _handleResponse(response);
+      return json.decode(validatedResponse.body);
     } catch (e) {
+      if (e is ApiException) rethrow;
       throw ApiException('Erro de conexão: $e');
     }
   }

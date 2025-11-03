@@ -4,6 +4,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
+import '../widgets/custom_snackbar.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -33,10 +34,10 @@ class _SignupPageState extends State<SignupPage> {
     if (!_formKey.currentState!.validate()) return;
 
     if (!_acceptedTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Você deve aceitar os termos e condições'),
-        ),
+      CustomSnackBar.show(
+        context,
+        message: 'Você deve aceitar os termos e condições',
+        type: SnackBarType.error,
       );
       return;
     }

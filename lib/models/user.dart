@@ -3,6 +3,7 @@ class User {
   final String email;
   final String nome;
   final String? telefone;
+  final String? profilePhotoUrl;
   final String role;
   final bool isActive;
   final DateTime? createdAt;
@@ -12,6 +13,7 @@ class User {
     required this.email,
     required this.nome,
     this.telefone,
+    this.profilePhotoUrl,
     required this.role,
     required this.isActive,
     this.createdAt,
@@ -23,6 +25,7 @@ class User {
       email: json['email'] as String,
       nome: json['nome'] as String,
       telefone: json['telefone'] as String?,
+      profilePhotoUrl: json['profilePhotoUrl'] as String?,
       role: json['role'] as String,
       isActive: json['isActive'] as bool? ?? true,
       createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt']) : null,
@@ -35,9 +38,17 @@ class User {
       'email': email,
       'nome': nome,
       'telefone': telefone,
+      'profilePhotoUrl': profilePhotoUrl,
       'role': role,
       'isActive': isActive,
       if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
     };
+  }
+
+  // Helper para obter URL completa da foto de perfil
+  String? get fullProfilePhotoUrl {
+    if (profilePhotoUrl == null) return null;
+    if (profilePhotoUrl!.startsWith('http')) return profilePhotoUrl;
+    return 'http://localhost:3000$profilePhotoUrl';
   }
 }

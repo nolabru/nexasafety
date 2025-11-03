@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'package:geolocator/geolocator.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../core/enums/occurrence_enums.dart';
+import '../core/services/occurrence_service.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
+import '../widgets/custom_snackbar.dart';
 
 class NewOccurrencePage extends StatefulWidget {
   const NewOccurrencePage({super.key});
@@ -17,17 +21,53 @@ class NewOccurrencePage extends StatefulWidget {
 class _NewOccurrencePageState extends State<NewOccurrencePage> {
   final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
-  
+  final _occurrenceService = OccurrenceService();
+
   OccurrenceType? _selectedType;
   bool _isAnonymous = true;
   bool _isLoading = false;
   final List<XFile> _mediaFiles = [];
   final ImagePicker _picker = ImagePicker();
+  Position? _currentPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
+  }
 
   @override
   void dispose() {
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      setState(() {
+        _currentPosition = position;
+      });
+    } catch (e) {
+      debugPrint('Erro ao obter localização: $e');
+    }
   }
 
   Future<void> _pickMedia() async {
@@ -40,8 +80,10 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao selecionar mídia: $e')),
+      CustomSnackBar.show(
+        context,
+        message: 'Erro ao selecionar mídia: $e',
+        type: SnackBarType.error,
       );
     }
   }
@@ -54,28 +96,70 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     if (_selectedType == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, selecione o tipo de ocorrência')),
+      CustomSnackBar.show(
+        context,
+        message: 'Por favor, selecione o tipo de ocorrência',
+        type: SnackBarType.error,
       );
       return;
     }
 
     setState(() => _isLoading = true);
 
-    // TODO: Implement actual submission logic
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Use current location or default to Salvador
+      final latitude = _currentPosition?.latitude ?? -12.9714;
+      final longitude = _currentPosition?.longitude ?? -38.5014;
 
-    if (!mounted) return;
+      // Convert enum to API format
+      final tipoApi = _selectedType!.name;
 
-    setState(() => _isLoading = false);
+      if (_mediaFiles.isEmpty) {
+        // Create occurrence without media
+        await _occurrenceService.createOccurrence(
+          tipo: tipoApi,
+          descricao: _descriptionController.text,
+          latitude: latitude,
+          longitude: longitude,
+          isPublic: !_isAnonymous,
+        );
+      } else {
+        // Create occurrence with media
+        final files = _mediaFiles.map((xfile) => File(xfile.path)).toList();
+        await _occurrenceService.createOccurrenceWithMedia(
+          tipo: tipoApi,
+          descricao: _descriptionController.text,
+          latitude: latitude,
+          longitude: longitude,
+          mediaFiles: files,
+          isPublic: !_isAnonymous,
+        );
+      }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Ocorrência enviada com sucesso!')),
-    );
+      if (!mounted) return;
 
-    Navigator.of(context).pop(true);
+      setState(() => _isLoading = false);
+
+      CustomSnackBar.show(
+        context,
+        message: 'Ocorrência enviada com sucesso!',
+        type: SnackBarType.success,
+      );
+
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      CustomSnackBar.show(
+        context,
+        message: 'Erro ao enviar ocorrência: $e',
+        type: SnackBarType.error,
+      );
+    }
   }
 
   @override
@@ -86,10 +170,11 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
           'Nova Ocorrência',
           style: AppTextStyles.headlineMedium.copyWith(
             color: AppColors.primary,
+            fontSize: 16,
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const FaIcon(FontAwesomeIcons.arrowLeft, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -99,10 +184,7 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
           padding: const EdgeInsets.all(16),
           children: [
             // Tipo
-            Text(
-              'Tipo',
-              style: AppTextStyles.labelLarge,
-            ),
+            Text('Tipo', style: AppTextStyles.labelLarge),
             const SizedBox(height: 8),
             DropdownButtonFormField<OccurrenceType>(
               value: _selectedType,
@@ -149,9 +231,9 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
                 return null;
               },
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Descrição
             CustomTextField(
               label: 'Descrição',
@@ -168,16 +250,13 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
                 return null;
               },
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Fotos/Vídeos
-            Text(
-              'Fotos/Vídeos ( Opcional )',
-              style: AppTextStyles.labelLarge,
-            ),
+            Text('Fotos/Vídeos ( Opcional )', style: AppTextStyles.labelLarge),
             const SizedBox(height: 8),
-            
+
             // Media preview or add button
             if (_mediaFiles.isEmpty)
               Container(
@@ -242,9 +321,9 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
                   },
                 ),
               ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Add media button
             CustomButton(
               text: 'Adicionar Mídia',
@@ -253,9 +332,9 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
               textColor: Colors.white,
               icon: Icons.add_photo_alternate,
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Manter Anonimato checkbox
             Row(
               children: [
@@ -275,16 +354,16 @@ class _NewOccurrencePageState extends State<NewOccurrencePage> {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Submit button
             CustomButton(
               text: 'Enviar',
               onPressed: _submit,
               isLoading: _isLoading,
             ),
-            
+
             const SizedBox(height: 32),
           ],
         ),

@@ -118,10 +118,11 @@ class _MyOccurrencesPageState extends State<MyOccurrencesPage> {
           'Minhas Ocorrências',
           style: AppTextStyles.headlineMedium.copyWith(
             color: AppColors.primary,
+            fontSize: 16
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const FaIcon(FontAwesomeIcons.arrowLeft, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
         actions: [

@@ -26,18 +26,20 @@ class OccurrenceService {
     bool isPublic = true,
     List<String> mediaUrls = const [],
   }) async {
-    final res = await _api.post('/occurrences', {
-      'tipo': tipo,
-      'descricao': descricao,
-      'latitude': latitude,
-      'longitude': longitude,
-      'isPublic': isPublic,
-      'mediaUrls': mediaUrls,
-    }, requiresAuth: true);
-
-    return ApiOccurrence.fromJson(
-      json.decode(res.body) as Map<String, dynamic>,
+    final res = await _api.post(
+      '/occurrences',
+      data: {
+        'tipo': tipo,
+        'descricao': descricao,
+        'latitude': latitude,
+        'longitude': longitude,
+        'isPublic': isPublic,
+        'mediaUrls': mediaUrls,
+      },
+      requiresAuth: true,
     );
+
+    return ApiOccurrence.fromJson(res as Map<String, dynamic>);
   }
 
   // POST /occurrences/with-media (multipart)
@@ -100,7 +102,7 @@ class OccurrenceService {
   // GET /occurrences/my
   Future<List<ApiOccurrence>> getMyOccurrences() async {
     final res = await _api.get('/occurrences/my', requiresAuth: true);
-    final List<dynamic> data = json.decode(res.body) as List<dynamic>;
+    final List<dynamic> data = res as List<dynamic>;
     return data
         .map((e) => ApiOccurrence.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -124,9 +126,7 @@ class OccurrenceService {
       },
     );
 
-    return PaginatedOccurrences.fromJson(
-      json.decode(res.body) as Map<String, dynamic>,
-    );
+    return PaginatedOccurrences.fromJson(res as Map<String, dynamic>);
   }
 
   // GET /occurrences/nearby
@@ -148,7 +148,7 @@ class OccurrenceService {
         requiresAuth: false,
         queryParams: uriParams,
       );
-      final List<dynamic> data = json.decode(res.body) as List<dynamic>;
+      final List<dynamic> data = res as List<dynamic>;
       return data
           .map((e) => ApiOccurrence.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -159,7 +159,7 @@ class OccurrenceService {
         requiresAuth: false,
         queryParams: uriParams,
       );
-      final List<dynamic> data = json.decode(res.body) as List<dynamic>;
+      final List<dynamic> data = res as List<dynamic>;
       return data
           .map((e) => ApiOccurrence.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -192,7 +192,7 @@ class OccurrenceService {
         requiresAuth: requiresAuth,
         queryParams: qp,
       );
-      return json.decode(res.body) as Map<String, dynamic>;
+      return res as Map<String, dynamic>;
     } on NotFoundException {
       // Fallback para rota em PT-BR
       final res = await _api.get(
@@ -200,15 +200,13 @@ class OccurrenceService {
         requiresAuth: requiresAuth,
         queryParams: qp,
       );
-      return json.decode(res.body) as Map<String, dynamic>;
+      return res as Map<String, dynamic>;
     }
   }
 
   // GET /occurrences/:id
   Future<ApiOccurrence> getById(String id) async {
     final res = await _api.get('/occurrences/$id', requiresAuth: true);
-    return ApiOccurrence.fromJson(
-      json.decode(res.body) as Map<String, dynamic>,
-    );
+    return ApiOccurrence.fromJson(res as Map<String, dynamic>);
   }
 }

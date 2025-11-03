@@ -10,6 +10,7 @@ import 'package:nexasafety/core/services/heatmap_service.dart';
 import 'package:nexasafety/widgets/heatmap_filter_panel.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:nexasafety/core/services/occurrence_service.dart';
+import 'package:nexasafety/widgets/custom_snackbar.dart';
 import 'dart:async';
 
 class HomeMapPage extends StatefulWidget {
@@ -217,11 +218,10 @@ class _HomeMapPageState extends State<HomeMapPage> {
     } catch (e) {
       setState(() => _isLoadingHeatmap = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao carregar dados do mapa: $e'),
-            backgroundColor: Colors.red,
-          ),
+        CustomSnackBar.show(
+          context,
+          message: 'Erro ao carregar dados do mapa: $e',
+          type: SnackBarType.error,
         );
       }
     }
@@ -288,41 +288,39 @@ class _HomeMapPageState extends State<HomeMapPage> {
             // Move o mapa para os bounds padrão com um zoom adequado
             _mapController.move(LatLng(centerLat, centerLng), 12);
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Movi o mapa para uma área com dados de calor (Salvador-BA).'),
-              ),
+            CustomSnackBar.show(
+              context,
+              message: 'Movi o mapa para uma área com dados de calor (Salvador-BA).',
+              type: SnackBarType.info,
             );
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Heatmap sem pontos nesta área (zoom $zoom). Tente mover o mapa ou reduzir o zoom.',
-                ),
-              ),
+            CustomSnackBar.show(
+              context,
+              message: 'Heatmap sem pontos nesta área (zoom $zoom). Tente mover o mapa ou reduzir o zoom.',
+              type: SnackBarType.info,
             );
           }
         } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Sem pontos para exibir e falha no fallback: $e',
-              ),
-            ),
+          CustomSnackBar.show(
+            context,
+            message: 'Sem pontos para exibir e falha no fallback: $e',
+            type: SnackBarType.error,
           );
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Heatmap: ${pts.length} pontos (zoom $zoom)'),
-          ),
+        CustomSnackBar.show(
+          context,
+          message: 'Heatmap: ${pts.length} pontos (zoom $zoom)',
+          type: SnackBarType.info,
         );
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoadingHeatmap = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar heatmap: $e')),
+      CustomSnackBar.show(
+        context,
+        message: 'Erro ao carregar heatmap: $e',
+        type: SnackBarType.error,
       );
     }
   }
@@ -343,11 +341,10 @@ class _HomeMapPageState extends State<HomeMapPage> {
   /// Show filter panel
   void _showFilterPanel() {
     if (_occurrences.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Carregue os dados do mapa primeiro'),
-          backgroundColor: Colors.orange,
-        ),
+      CustomSnackBar.show(
+        context,
+        message: 'Carregue os dados do mapa primeiro',
+        type: SnackBarType.info,
       );
       return;
     }
@@ -449,8 +446,10 @@ class _HomeMapPageState extends State<HomeMapPage> {
       await ApiClient().clearToken();
       if (!mounted) return;
       setState(() => _isLoggedIn = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sessão encerrada.')),
+      CustomSnackBar.show(
+        context,
+        message: 'Sessão encerrada.',
+        type: SnackBarType.info,
       );
       // Redireciona para login após sair
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
@@ -663,8 +662,10 @@ class _HomeMapPageState extends State<HomeMapPage> {
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
                       if (!_isLoggedIn) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Faça login para usar o mapa de calor.')),
+                        CustomSnackBar.show(
+                          context,
+                          message: 'Faça login para usar o mapa de calor.',
+                          type: SnackBarType.info,
                         );
                         Navigator.of(context).pushNamed('/login');
                         return;

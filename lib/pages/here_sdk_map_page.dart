@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:here_sdk/core.dart';
 import 'package:here_sdk/mapview.dart';
@@ -8,7 +9,9 @@ import 'package:nexasafety/core/services/api_client.dart'
 import 'package:nexasafety/core/services/occurrence_service.dart';
 
 class HereSdkMapPage extends StatefulWidget {
-  const HereSdkMapPage({super.key});
+  final bool showHeatmap;
+  
+  const HereSdkMapPage({super.key, this.showHeatmap = false});
 
   @override
   State<HereSdkMapPage> createState() => _HereSdkMapPageState();
@@ -20,6 +23,7 @@ class _HereSdkMapPageState extends State<HereSdkMapPage> {
   // Heatmap state
   final _heatmapService = HeatmapService();
   final List<MapPolygon> _heatPolygons = [];
+  final List<MapMarker> _markers = [];
   MapIdleListener? _idleListener;
   Timer? _debounce;
   String? _statusMessage;
@@ -34,6 +38,14 @@ class _HereSdkMapPageState extends State<HereSdkMapPage> {
   void initState() {
     super.initState();
     SdkContext.init(IsolateOrigin.main);
+  }
+
+  @override
+  void didUpdateWidget(HereSdkMapPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.showHeatmap != widget.showHeatmap) {
+      _refreshHeatmap();
+    }
   }
 
   void _onMapCreated(HereMapController controller) {
@@ -189,14 +201,19 @@ class _HereSdkMapPageState extends State<HereSdkMapPage> {
             ctrl.camera.lookAtPointWithMeasure(newTarget, newDistance);
             
             // Draw default points
+            _clearMarkers();
             for (final p in defaultPoints) {
-              final radius = _radiusFor(p.intensity, 12);
-              final color = _colorFor(p.intensity);
-              final circle = GeoCircle(GeoCoordinates(p.lat, p.lng), radius);
-              final polygon = MapPolygon(GeoPolygon.withGeoCircle(circle), color);
-              polygon.drawOrder = 100;
-              ctrl.mapScene.addMapPolygon(polygon);
-              _heatPolygons.add(polygon);
+              if (widget.showHeatmap) {
+                final radius = _radiusFor(p.intensity, 12);
+                final color = _colorFor(p.intensity);
+                final circle = GeoCircle(GeoCoordinates(p.lat, p.lng), radius);
+                final polygon = MapPolygon(GeoPolygon.withGeoCircle(circle), color);
+                polygon.drawOrder = 100;
+                ctrl.mapScene.addMapPolygon(polygon);
+                _heatPolygons.add(polygon);
+              } else {
+                _addMarker(p.lat, p.lng, p.intensity);
+              }
             }
             
             if (mounted) {
@@ -228,14 +245,19 @@ class _HereSdkMapPageState extends State<HereSdkMapPage> {
               });
             }
           } else {
+            _clearMarkers();
             for (final o in occs) {
-              final radius = _radiusFor(1, zoom);
-              final color = _colorFor(3);
-              final circle = GeoCircle(GeoCoordinates(o.latitude, o.longitude), radius);
-              final polygon = MapPolygon(GeoPolygon.withGeoCircle(circle), color);
-              polygon.drawOrder = 100;
-              ctrl.mapScene.addMapPolygon(polygon);
-              _heatPolygons.add(polygon);
+              if (widget.showHeatmap) {
+                final radius = _radiusFor(1, zoom);
+                final color = _colorFor(3);
+                final circle = GeoCircle(GeoCoordinates(o.latitude, o.longitude), radius);
+                final polygon = MapPolygon(GeoPolygon.withGeoCircle(circle), color);
+                polygon.drawOrder = 100;
+                ctrl.mapScene.addMapPolygon(polygon);
+                _heatPolygons.add(polygon);
+              } else {
+                _addMarker(o.latitude, o.longitude, 3);
+              }
             }
             if (mounted) {
               setState(() {
@@ -255,17 +277,27 @@ class _HereSdkMapPageState extends State<HereSdkMapPage> {
         return;
       }
 
-      for (final p in points) {
-        final radius = _radiusFor(p.intensity, zoom);
-        final color = _colorFor(p.intensity);
+      // Clear both markers and polygons
+      _clearMarkers();
+      
+      if (widget.showHeatmap) {
+        // Show heatmap (circles)
+        for (final p in points) {
+          final radius = _radiusFor(p.intensity, zoom);
+          final color = _colorFor(p.intensity);
 
-        final circle = GeoCircle(GeoCoordinates(p.lat, p.lng), radius);
-        final polygon = MapPolygon(GeoPolygon.withGeoCircle(circle), color);
-        // Ensure beneath markers
-        polygon.drawOrder = 100;
+          final circle = GeoCircle(GeoCoordinates(p.lat, p.lng), radius);
+          final polygon = MapPolygon(GeoPolygon.withGeoCircle(circle), color);
+          polygon.drawOrder = 100;
 
-        ctrl.mapScene.addMapPolygon(polygon);
-        _heatPolygons.add(polygon);
+          ctrl.mapScene.addMapPolygon(polygon);
+          _heatPolygons.add(polygon);
+        }
+      } else {
+        // Show markers (pins)
+        for (final p in points) {
+          _addMarker(p.lat, p.lng, p.intensity);
+        }
       }
       // Optionally, adjust visibility ranges by zoom to avoid clutter
       // (skipped for simplicity)
@@ -308,6 +340,37 @@ class _HereSdkMapPageState extends State<HereSdkMapPage> {
       } catch (_) {}
     }
     _heatPolygons.clear();
+  }
+
+  void _clearMarkers() {
+    final ctrl = _controller;
+    if (ctrl == null) {
+      _markers.clear();
+      return;
+    }
+    for (final marker in _markers) {
+      try {
+        ctrl.mapScene.removeMapMarker(marker);
+      } catch (_) {}
+    }
+    _markers.clear();
+  }
+
+  void _addMarker(double lat, double lng, int intensity) {
+    final ctrl = _controller;
+    if (ctrl == null) return;
+
+    final coordinates = GeoCoordinates(lat, lng);
+    
+    // Create a simple red circle marker using MapMarker3D or basic MapPolygon
+    // Since MapMarker requires an image, we'll use a small circle polygon instead
+    final radius = 10.0; // 10 meters radius for pin
+    final circle = GeoCircle(coordinates, radius);
+    final polygon = MapPolygon(GeoPolygon.withGeoCircle(circle), Colors.red);
+    polygon.drawOrder = 200; // Above heatmap polygons
+    
+    ctrl.mapScene.addMapPolygon(polygon);
+    _heatPolygons.add(polygon); // Reuse the same list for cleanup
   }
 
   // Radius in meters based on intensity and zoom

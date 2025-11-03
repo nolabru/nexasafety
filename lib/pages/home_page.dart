@@ -35,7 +35,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Stack(
         children: [
-          const HereSdkMapPage(),
+          HereSdkMapPage(showHeatmap: _isHeatmapActive),
           
           // Floating Bottom Navigation - REDESENHADO
           Positioned(
@@ -116,10 +116,11 @@ class _NavButton extends StatelessWidget {
         width: 50,
         height: 50,
         decoration: BoxDecoration(
-          color: isActive 
-              ? AppColors.primary.withOpacity(0.15) 
-              : Colors.white,
+          color: Colors.white,
           shape: BoxShape.circle,
+          border: isActive 
+              ? Border.all(color: AppColors.primary, width: 3)
+              : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.2),

@@ -4,6 +4,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_text_styles.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_text_field.dart';
+import '../widgets/custom_snackbar.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -48,8 +49,10 @@ class _LoginPageState extends State<LoginPage> {
 
   void _onForgotPassword() {
     // TODO: Implement forgot password
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Funcionalidade em desenvolvimento')),
+    CustomSnackBar.show(
+      context,
+      message: 'Funcionalidade em desenvolvimento',
+      type: SnackBarType.info,
     );
   }
 
